@@ -5,9 +5,14 @@ import {
   boardAt,
   formatClock,
   formatCountdown,
+  geoFailure,
   haversineMeters,
+  isDeparturePast,
   resolveDirection,
+  serviceRank,
+  sheetIsStale,
   zoneFor,
+  zonedWallToUtc,
 } from "./logic.ts";
 
 const min = (clock: string) => {
@@ -89,6 +94,51 @@ describe("boardAt", () => {
     assert.equal(board.next.minutes, min("5:00AM"));
     assert.equal(formatCountdown(board.next.waitSec), "10:00");
   });
+
+  it("keeps after-midnight entrance buses ahead of an 11:45 PM rider", () => {
+    const now = min("11:45PM") * 60;
+    const board = boardAt("from-hotel", now, 3);
+    assert.equal(board.next.minutes, min("11:50PM"));
+    assert.equal(isDeparturePast(min("12:00AM"), now, board.next.minutes), false);
+    assert.equal(isDeparturePast(min("12:15AM"), now, board.next.minutes), false);
+    assert.equal(isDeparturePast(min("1:30AM"), now, board.next.minutes), false);
+    assert.equal(isDeparturePast(min("5:00AM"), now, board.next.minutes), true);
+    assert.ok(serviceRank(min("3:15AM")) < serviceRank(min("12:00AM")));
+    assert.equal(board.lotCallout, false);
+  });
+
+  it("dims a 12:00 AM entrance bus once it has actually left", () => {
+    const now = min("12:05AM") * 60;
+    const board = boardAt("from-hotel", now, 3);
+    assert.equal(board.next.minutes, min("12:15AM"));
+    assert.equal(board.lotCallout, false);
+    assert.equal(board.entranceStationed, true);
+    assert.equal(isDeparturePast(min("12:00AM"), now, board.next.minutes), true);
+    assert.equal(isDeparturePast(min("12:15AM"), now, board.next.minutes), false);
+    assert.equal(isDeparturePast(min("5:00AM"), now, board.next.minutes), true);
+  });
+
+  it("points a missed walk at the next bus you can still catch", () => {
+    const board = boardAt("to-hotel", min("7:22AM") * 60, 15);
+    assert.ok(board.leaveInSec < 0);
+    assert.notEqual(board.catchMinutes, min("7:30AM"));
+    assert.equal(board.catchMinutes, min("7:45AM"));
+  });
+
+  it("shortens the overnight countdown when the clocks spring forward", () => {
+    const nowMs = zonedWallToUtc(2026, 3, 7, 23, 55, 0);
+    const board = boardAt("to-hotel", min("11:55PM") * 60, 0, nowMs);
+    assert.equal(board.next.minutes, min("3:00AM"));
+    assert.equal(board.next.tomorrow, true);
+    assert.equal(board.next.waitSec, 2 * 3600 + 5 * 60);
+  });
+
+  it("lengthens the overnight countdown when the clocks fall back", () => {
+    const nowMs = zonedWallToUtc(2026, 10, 31, 23, 55, 0);
+    const board = boardAt("to-hotel", min("11:55PM") * 60, 0, nowMs);
+    assert.equal(board.next.minutes, min("3:00AM"));
+    assert.equal(board.next.waitSec, 4 * 3600 + 5 * 60);
+  });
 });
 
 describe("location", () => {
@@ -105,6 +155,13 @@ describe("location", () => {
     assert.equal(resolveDirection("auto", "away"), "to-hotel");
     assert.equal(resolveDirection("auto", "far"), "to-hotel");
     assert.equal(resolveDirection("to-hotel", "at-hotel"), "to-hotel");
+    assert.equal(geoFailure(1), "denied");
+    assert.equal(geoFailure(2), "unavailable");
+    assert.equal(geoFailure(3), "timeout");
+    const fresh = zonedWallToUtc(2026, 5, 1, 12, 0, 0);
+    const old = zonedWallToUtc(2026, 9, 30, 12, 0, 0);
+    assert.equal(sheetIsStale(fresh), false);
+    assert.equal(sheetIsStale(old), true);
     const here = haversineMeters(HOTEL.lat, HOTEL.lon, HOTEL.lat, HOTEL.lon);
     assert.equal(here < 1, true);
   });

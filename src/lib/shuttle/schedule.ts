@@ -7,6 +7,10 @@
  */
 
 export const SHEET_LABEL = "April 28, 2026";
+/** Calendar date of SHEET_LABEL. Used to warn when the sheet is old. */
+export const SHEET_ISO = "2026-04-28";
+/** Show a warning once the sheet is at least this many days old. */
+export const SHEET_STALE_DAYS = 45;
 export const DISPATCH_PHONE = "4073136990";
 export const DISPATCH_DISPLAY = "407.313.6990";
 

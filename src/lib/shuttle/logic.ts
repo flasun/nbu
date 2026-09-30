@@ -1,4 +1,4 @@
-import { DEPARTURES, HOTEL, LOT, TZ, type Direction } from "./schedule.ts";
+import { DEPARTURES, HOTEL, LOT, SHEET_ISO, SHEET_STALE_DAYS, TZ, type Direction } from "./schedule.ts";
 
 export const GRACE_SEC = 45;
 /** Red banner on the sheet: no bus 1:30 AM–3:00 AM. */
@@ -10,13 +10,14 @@ export type Mode = "auto" | Direction;
 
 export type Zone = "at-hotel" | "at-lot" | "away" | "fuzzy" | "far";
 
-export type PlaceState = Zone | "pending" | "denied" | "unsupported";
+export type PlaceState = Zone | "pending" | "denied" | "unsupported" | "idle" | "timeout" | "unavailable";
 
 export type OrlandoNow = {
   seconds: number;
   weekday: string;
   dateLabel: string;
   clock: string;
+  epochMs: number;
 };
 
 export type BusHit = {
@@ -43,6 +44,8 @@ export type BoardSnapshot = {
   walkMin: number;
   /** Seconds until you should leave to make this bus. Negative = too late to walk. */
   leaveInSec: number;
+  /** Printed time of the next bus the walk can still reach. Null if none are in range. */
+  catchMinutes: number | null;
 };
 
 export function readOrlando(date: Date): OrlandoNow {
@@ -69,6 +72,7 @@ export function readOrlando(date: Date): OrlandoNow {
     weekday: get("weekday"),
     dateLabel: `${get("month")} ${get("day")}`,
     clock: `${h12}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${ap}`,
+    epochMs: date.getTime(),
   };
 }
 
@@ -147,19 +151,131 @@ export function resolveDirection(mode: Mode, place: PlaceState): Direction | nul
   return null;
 }
 
-function hitsAround(times: number[], nowSec: number): BusHit[] {
+/** GeolocationPositionError.code: 1 denied, 2 unavailable, 3 timeout. */
+export function geoFailure(code: number): "denied" | "unavailable" | "timeout" {
+  if (code === 1) return "denied";
+  if (code === 3) return "timeout";
+  return "unavailable";
+}
+
+type Wall = { year: number; month: number; day: number; hour: number; minute: number; second: number };
+
+function orlandoWall(date: Date): Wall {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+  let hour = get("hour");
+  if (hour === 24) hour = 0;
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour,
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+function tzOffsetMs(utcMs: number): number {
+  const wall = orlandoWall(new Date(utcMs));
+  const asUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second);
+  return asUtc - utcMs;
+}
+
+/** Wall-clock time in Orlando, as a UTC epoch. Handles the two DST nights. */
+export function zonedWallToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second = 0,
+): number {
+  const guess = Date.UTC(year, month - 1, day, hour, minute, second);
+  const utc = guess - tzOffsetMs(guess - tzOffsetMs(guess));
+  return guess - tzOffsetMs(utc);
+}
+
+/** Today's Orlando date at a chosen clock time, as a UTC epoch. */
+export function atOrlandoTime(nowMs: number, hour: number, minute: number, second = 0): number {
+  const wall = orlandoWall(new Date(nowMs));
+  return zonedWallToUtc(wall.year, wall.month, wall.day, hour, minute, second);
+}
+
+function shiftDate(year: number, month: number, day: number, days: number) {
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function departureUtc(nowMs: number, dayOffset: number, minutes: number): number {
+  const wall = orlandoWall(new Date(nowMs));
+  const date = shiftDate(wall.year, wall.month, wall.day, dayOffset);
+  return zonedWallToUtc(date.year, date.month, date.day, Math.floor(minutes / 60), minutes % 60, 0);
+}
+
+export function sheetIsStale(nowMs: number, afterDays = SHEET_STALE_DAYS): boolean {
+  const [year, month, day] = SHEET_ISO.split("-").map(Number);
+  const sheetMs = zonedWallToUtc(year, month, day, 12, 0, 0);
+  return nowMs - sheetMs >= afterDays * 86_400_000;
+}
+
+/** Order a service day from the 3:00 AM restart through the after-midnight buses. */
+export function serviceRank(minutes: number): number {
+  return minutes < GAP_END_MIN ? minutes + 1440 : minutes;
+}
+
+export function listLabel(minutes: number): string {
+  if (minutes < GAP_END_MIN) return "After midnight";
+  return daypart(minutes);
+}
+
+/**
+ * A printed time is already gone for this service day.
+ * After midnight, buses at 12:00–1:30 are still ahead of an 11 PM rider.
+ * `nextMinutes` stays highlighted even when the row is the restart at 3:00.
+ */
+export function isDeparturePast(minutes: number, nowSec: number, nextMinutes: number): boolean {
+  if (minutes === nextMinutes) return false;
+  const now = ((nowSec % 86400) + 86400) % 86400;
+  const timeSec = minutes * 60;
+  const start = GAP_END_MIN * 60;
+  if (now >= start) {
+    if (timeSec < start) return false;
+    return timeSec + GRACE_SEC < now;
+  }
+  if (now >= GAP_START_MIN * 60) return timeSec < start;
+  if (timeSec >= start) return true;
+  return timeSec + GRACE_SEC < now;
+}
+
+function hitsAround(times: number[], nowSec: number, nowMs?: number): BusHit[] {
   const hits: BusHit[] = [];
   for (const day of [0, 1]) {
     for (const minutes of times) {
-      const dep = day * 86400 + minutes * 60;
-      const waitSec = dep - nowSec;
+      const waitSec =
+        nowMs == null
+          ? day * 86400 + minutes * 60 - nowSec
+          : Math.round((departureUtc(nowMs, day, minutes) - nowMs) / 1000);
       if (waitSec < -GRACE_SEC) continue;
-      if (waitSec > 86400) continue;
+      if (waitSec > 36 * 3600) continue;
       hits.push({
         minutes,
         waitSec,
         boarding: waitSec < 0,
-        tomorrow: day === 1 && minutes * 60 <= nowSec,
+        tomorrow: nowMs == null ? day === 1 && minutes * 60 <= nowSec : day === 1,
       });
     }
   }
@@ -171,10 +287,11 @@ export function boardAt(
   direction: Direction,
   nowSec: number,
   walkMin: number,
+  nowMs?: number,
 ): BoardSnapshot {
   const now = ((nowSec % 86400) + 86400) % 86400;
   const times = DEPARTURES[direction];
-  const hits = hitsAround(times, now);
+  const hits = hitsAround(times, now, nowMs);
   const next = hits[0];
   if (!next) throw new Error("Schedule has no departures");
   const following = hits.slice(1, 4);
@@ -182,8 +299,10 @@ export function boardAt(
   let last: BoardSnapshot["last"] = null;
   for (const day of [-1, 0]) {
     for (const minutes of times) {
-      const dep = day * 86400 + minutes * 60;
-      const ago = now - dep;
+      const ago =
+        nowMs == null
+          ? now - (day * 86400 + minutes * 60)
+          : Math.round((nowMs - departureUtc(nowMs, day, minutes)) / 1000);
       if (ago > GRACE_SEC && (last === null || ago < last.agoSec)) {
         last = { minutes, agoSec: ago };
       }
@@ -206,6 +325,8 @@ export function boardAt(
     }
   }
 
+  const catchHit = hits.find((hit) => !hit.boarding && hit.waitSec >= walkMin * 60) ?? null;
+
   return {
     direction,
     inGap,
@@ -217,6 +338,7 @@ export function boardAt(
     progress,
     walkMin,
     leaveInSec: next.boarding ? 0 : next.waitSec - walkMin * 60,
+    catchMinutes: catchHit ? catchHit.minutes : null,
   };
 }
 

@@ -20,18 +20,24 @@ import {
   HOTEL,
   LOT,
   SHEET_LABEL,
+  SHEET_STALE_DAYS,
   type Direction,
 } from "@/lib/shuttle/schedule";
 import {
   boardAt,
-  daypart,
   formatClock,
   formatCountdown,
   formatDistance,
+  geoFailure,
   haversineMeters,
+  isDeparturePast,
+  listLabel,
   readOrlando,
   resolveDirection,
+  serviceRank,
+  sheetIsStale,
   zoneFor,
+  atOrlandoTime,
   type BoardSnapshot,
   type Mode,
   type OrlandoNow,
@@ -46,6 +52,7 @@ type Prefs = {
   walkMin: number;
   chime: boolean;
   awake: boolean;
+  locate: boolean;
 };
 
 type Fix = {
@@ -60,6 +67,7 @@ const DEFAULT_PREFS: Prefs = {
   walkMin: 3,
   chime: false,
   awake: false,
+  locate: false,
 };
 
 const focusRing =
@@ -80,6 +88,7 @@ function loadPrefs(): Prefs {
       walkMin: Number.isFinite(walkMin) ? Math.min(15, Math.max(0, Math.round(walkMin))) : 3,
       chime: Boolean(parsed.chime),
       awake: Boolean(parsed.awake),
+      locate: Boolean(parsed.locate),
     };
   } catch {
     return DEFAULT_PREFS;
@@ -137,6 +146,16 @@ function walkLine(board: BoardSnapshot): { late: boolean; text: string } {
     return { late: false, text: "Plenty of time before you need to head out." };
   }
   if (board.walkMin === 0) return { late: false, text: "Walk time is zero — you're counting from the stop." };
+  if (board.leaveInSec < 0) {
+    const catchMin = board.catchMinutes;
+    const catchable = catchMin != null && catchMin !== board.next.minutes;
+    return {
+      late: true,
+      text: catchable
+        ? `Too late for this one. Next you can catch is ${formatClock(catchMin)}.`
+        : "Too late for this one.",
+    };
+  }
   if (board.leaveInSec < 60) {
     const after = board.following[0];
     return {
@@ -168,6 +187,12 @@ function placeTitle(place: PlaceState): string {
       return "Coming in to the lot";
     case "denied":
       return "Location is off";
+    case "timeout":
+      return "Location timed out";
+    case "idle":
+      return "Not using location";
+    case "unavailable":
+      return "No location fix";
     default:
       return "Location unavailable";
   }
@@ -177,15 +202,19 @@ export function ShuttleBoard() {
   const live = useOrlandoNow();
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [hydrated, setHydrated] = useState(false);
-  const [place, setPlace] = useState<PlaceState>("pending");
+  const [place, setPlace] = useState<PlaceState>("idle");
   const [fix, setFix] = useState<Fix | null>(null);
   const [plan, setPlan] = useState<string>("");
   const [wakeNote, setWakeNote] = useState<string | null>(null);
+  const [chimeArmed, setChimeArmed] = useState(false);
+  const [locateNonce, setLocateNonce] = useState(0);
   const nextRow = useRef<HTMLLIElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const prevWait = useRef<number | null>(null);
+  const chimeDirection = useRef<Direction | null>(null);
   const wakeLock = useRef<WakeLockSentinel | null>(null);
+  const locateGen = useRef(0);
 
   useEffect(() => {
     setPrefs(loadPrefs());
@@ -198,37 +227,54 @@ export function ShuttleBoard() {
   }, [prefs, hydrated]);
 
   useEffect(() => {
+    if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!prefs.locate) {
+      locateGen.current += 1;
+      setPlace("idle");
+      setFix(null);
+      return;
+    }
+    if (prefs.mode !== "auto") return;
     if (!("geolocation" in navigator)) {
       setPlace("unsupported");
       return;
     }
-    const id = navigator.geolocation.watchPosition(
-      (pos) => {
-        const hotelM = haversineMeters(
-          pos.coords.latitude,
-          pos.coords.longitude,
-          HOTEL.lat,
-          HOTEL.lon,
-        );
-        const lotM = haversineMeters(
-          pos.coords.latitude,
-          pos.coords.longitude,
-          LOT.lat,
-          LOT.lon,
-        );
-        const accuracyM = pos.coords.accuracy;
-        const zone = zoneFor(hotelM, lotM, accuracyM);
-        setFix({ zone, hotelM, lotM, accuracyM });
-        setPlace(zone);
-      },
-      () => {
-        setFix(null);
-        setPlace("denied");
-      },
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
+    const ask = () => {
+      const gen = ++locateGen.current;
+      setPlace((prev) => (prev === "idle" ? "pending" : prev));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (gen !== locateGen.current) return;
+          const hotelM = haversineMeters(pos.coords.latitude, pos.coords.longitude, HOTEL.lat, HOTEL.lon);
+          const lotM = haversineMeters(pos.coords.latitude, pos.coords.longitude, LOT.lat, LOT.lon);
+          const accuracyM = pos.coords.accuracy;
+          const zone = zoneFor(hotelM, lotM, accuracyM);
+          setFix({ zone, hotelM, lotM, accuracyM });
+          setPlace(zone);
+        },
+        (err) => {
+          if (gen !== locateGen.current) return;
+          setFix(null);
+          setPlace(geoFailure(err.code));
+        },
+        { enableHighAccuracy: false, maximumAge: 60_000, timeout: 12_000 },
+      );
+    };
+    ask();
+    const onVis = () => {
+      if (document.visibilityState === "visible") ask();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      locateGen.current += 1;
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [hydrated, prefs.locate, prefs.mode, locateNonce]);
 
   useEffect(() => {
     if (!prefs.awake || !("wakeLock" in navigator)) {
@@ -263,11 +309,23 @@ export function ShuttleBoard() {
   const viewSec = planMin
     ? Number(planMin[1]) * 3600 + Number(planMin[2]) * 60
     : (live?.seconds ?? null);
-  const board = direction !== null && viewSec !== null ? boardAt(direction, viewSec, prefs.walkMin) : null;
+  const viewMs =
+    live == null
+      ? undefined
+      : planMin
+        ? atOrlandoTime(live.epochMs, Number(planMin[1]), Number(planMin[2]))
+        : live.epochMs;
+  const board =
+    direction !== null && viewSec !== null ? boardAt(direction, viewSec, prefs.walkMin, viewMs) : null;
 
   useEffect(() => {
-    if (!board || plan || !prefs.chime || !audioRef.current) {
-      prevWait.current = board?.next.waitSec ?? null;
+    if (!board || plan || !prefs.chime || !chimeArmed || !audioRef.current) {
+      prevWait.current = null;
+      return;
+    }
+    if (chimeDirection.current !== direction) {
+      chimeDirection.current = direction;
+      prevWait.current = board.next.waitSec;
       return;
     }
     const wait = board.next.waitSec;
@@ -276,7 +334,7 @@ export function ShuttleBoard() {
     if (prev == null || board.next.boarding) return;
     const crossed = [300, 120, 30].filter((mark) => prev > mark && wait <= mark);
     if (crossed.length) beep(audioRef.current);
-  }, [board, plan, prefs.chime]);
+  }, [board, plan, prefs.chime, chimeArmed, direction]);
 
   useEffect(() => {
     const row = nextRow.current;
@@ -300,14 +358,64 @@ export function ShuttleBoard() {
   }
 
   function followMe() {
-    setPrefs((prev) => ({ ...prev, mode: "auto" }));
+    setPlace("pending");
+    setPrefs((prev) => ({ ...prev, mode: "auto", locate: true }));
+  }
+
+  function useMyLocation() {
+    setPlace("pending");
+    setPrefs((prev) => ({ ...prev, locate: true }));
+    setLocateNonce((n) => n + 1);
+  }
+
+  function ensureAudio(): AudioContext | null {
+    const w = window as Window & { webkitAudioContext?: typeof AudioContext };
+    const Ctor = window.AudioContext ?? w.webkitAudioContext;
+    if (!Ctor) return null;
+    try {
+      if (!audioRef.current) audioRef.current = new Ctor();
+      return audioRef.current;
+    } catch {
+      return null;
+    }
   }
 
   function armChime() {
-    const AudioCtx = window.AudioContext;
-    if (!audioRef.current) audioRef.current = new AudioCtx();
-    void audioRef.current.resume();
-    setPrefs((prev) => ({ ...prev, chime: !prev.chime }));
+    if (prefs.chime && chimeArmed) {
+      setChimeArmed(false);
+      chimeDirection.current = null;
+      prevWait.current = null;
+      setPrefs((prev) => ({ ...prev, chime: false }));
+      return;
+    }
+    const ctx = ensureAudio();
+    if (!ctx) {
+      setWakeNote("This browser won't play a chime.");
+      return;
+    }
+    void ctx.resume().catch(() => {});
+    chimeDirection.current = direction;
+    prevWait.current = board?.next.waitSec ?? null;
+    setChimeArmed(true);
+    setPrefs((prev) => ({ ...prev, chime: true }));
+  }
+
+  function moveDirection(key: string) {
+    const order: Direction[] = ["to-hotel", "from-hotel"];
+    let next: Direction;
+    if (key === "Home" || (!direction && (key === "ArrowRight" || key === "ArrowDown"))) next = "to-hotel";
+    else if (key === "End" || (!direction && (key === "ArrowLeft" || key === "ArrowUp"))) next = "from-hotel";
+    else if (!direction) return;
+    else {
+      const forward = key === "ArrowRight" || key === "ArrowDown";
+      const index = order.indexOf(direction);
+      next = order[(index + (forward ? 1 : -1) + order.length) % order.length];
+    }
+    choose(next);
+    const id = next === "to-hotel" ? "direction-to" : "direction-from";
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.focus();
+    });
   }
 
   return (
@@ -340,6 +448,12 @@ export function ShuttleBoard() {
         <p className="mt-3 text-sm text-pretty text-ivory">
           Schedule as of Apr 28, 2026 — not a live tracker.
         </p>
+        {live && sheetIsStale(live.epochMs) ? (
+          <p className="mt-2 text-sm text-pretty text-alert">
+            This sheet is from {SHEET_LABEL}, more than {SHEET_STALE_DAYS} days ago. Check with dispatch
+            before you trust it.
+          </p>
+        ) : null}
       </section>
 
       <div className="grid items-start gap-4 lg:grid-cols-5">
@@ -348,9 +462,15 @@ export function ShuttleBoard() {
             role="radiogroup"
             aria-label="Which direction to show"
             className="grid grid-cols-2 gap-1 rounded-card bg-panel-2 p-1"
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              moveDirection(event.key);
+            }}
           >
             <DirectionButton
               active={direction === "to-hotel"}
+              tabIndex={direction === "from-hotel" ? -1 : 0}
               tone="lot"
               onClick={() => choose("to-hotel")}
               title="To hotel"
@@ -360,6 +480,7 @@ export function ShuttleBoard() {
             />
             <DirectionButton
               active={direction === "from-hotel"}
+              tabIndex={direction === "from-hotel" ? 0 : -1}
               tone="gate"
               onClick={() => choose("from-hotel")}
               title="From hotel"
@@ -387,7 +508,25 @@ export function ShuttleBoard() {
                 </p>
               </div>
             </div>
-            {prefs.mode === "auto" ? (
+            {prefs.mode !== "auto" ? (
+              <button
+                type="button"
+                onClick={followMe}
+                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-signal px-3 text-sm font-semibold text-signal-ink ${focusRing}`}
+              >
+                <Unlock className="size-4" aria-hidden="true" />
+                Follow me
+              </button>
+            ) : !prefs.locate || place === "timeout" || place === "denied" || place === "unavailable" ? (
+              <button
+                type="button"
+                onClick={useMyLocation}
+                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-ivory ${focusRing}`}
+              >
+                <MapPin className="size-4" aria-hidden="true" />
+                {prefs.locate ? "Try again" : "Use my location"}
+              </button>
+            ) : (
               <button
                 type="button"
                 disabled={!direction}
@@ -396,15 +535,6 @@ export function ShuttleBoard() {
               >
                 <Lock className="size-4" aria-hidden="true" />
                 Lock
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={followMe}
-                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-signal px-3 text-sm font-semibold text-signal-ink ${focusRing}`}
-              >
-                <Unlock className="size-4" aria-hidden="true" />
-                Follow me
               </button>
             )}
           </div>
@@ -495,7 +625,7 @@ export function ShuttleBoard() {
               ) : (
                 <BellOff className="size-4" aria-hidden="true" />
               )}
-              {prefs.chime ? "Chime on" : "Chime"}
+              {prefs.chime ? (chimeArmed ? "Chime on" : "Tap to re-arm") : "Chime"}
             </ToolButton>
           </div>
           {wakeNote ? <p className="mt-2 text-sm text-mute">{wakeNote}</p> : null}
@@ -573,20 +703,22 @@ function columnTone(direction: Direction) {
 
 function DirectionButton({
   active,
-  tone,
+  tabIndex,
   onClick,
   title,
   detail,
   icon,
   testId,
+  tone,
 }: {
   active: boolean;
-  tone: "lot" | "gate";
+  tabIndex: number;
   onClick: () => void;
   title: string;
   detail: string;
   icon: ReactNode;
   testId: string;
+  tone: "lot" | "gate";
 }) {
   const filled = tone === "lot" ? "bg-lot text-lot-ink" : "bg-gate text-gate-ink";
   const detailOn = tone === "lot" ? "text-lot-ink" : "text-gate-ink";
@@ -595,6 +727,7 @@ function DirectionButton({
       type="button"
       role="radio"
       aria-checked={active}
+      tabIndex={tabIndex}
       data-testid={testId}
       onClick={onClick}
       className={`flex min-h-16 flex-col items-start justify-center rounded-xl px-3 py-2 text-left ${focusRing} ${
@@ -632,6 +765,11 @@ function Hero({
       </p>
       <p className="mt-3 font-display text-5xl leading-none font-semibold tracking-wide text-ivory">
         {board.inGap ? "1:30–3:00 AM" : formatClock(board.next.minutes)}
+        {board.next.tomorrow && !board.inGap ? (
+          <span className="ml-2 align-middle font-sans text-base font-medium tracking-normal text-mute normal-case">
+            tomorrow
+          </span>
+        ) : null}
       </p>
       <p className="mt-2 text-sm text-mute">
         {board.inGap
@@ -655,9 +793,18 @@ function Hero({
           />
         </div>
       ) : null}
-      {(board.inGap || board.lotCallout || board.entranceStationed) && (
-        <Callout gap={board.inGap} resume={formatClock(board.next.minutes)} />
-      )}
+      {board.inGap ? <Callout kind="gap" resume={formatClock(board.next.minutes)} /> : null}
+      {board.lotCallout ? <Callout kind="lot" resume={formatClock(board.next.minutes)} /> : null}
+      {board.entranceStationed && !board.inGap ? (
+        <aside className="mt-4 rounded-2xl border border-line px-4 py-4">
+          <p className="font-medium text-ivory">
+            The lot has no bus until 3:00 AM. This column still leaves from the employee entrance.
+          </p>
+          <p className="mt-1 text-sm text-pretty text-mute">
+            Next one is {formatClock(board.next.minutes)}. Call dispatch only if it is not at the entrance.
+          </p>
+        </aside>
+      ) : null}
       <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
       {board.following.length > 0 && !board.inGap ? (
         <ul className="mt-4 flex flex-wrap gap-2" aria-label="Next three departures">
@@ -680,16 +827,19 @@ function Hero({
   );
 }
 
-function Callout({ gap, resume }: { gap: boolean; resume: string }) {
+function Callout({ kind, resume }: { kind: "gap" | "lot"; resume: string }) {
+  const lot = kind === "lot";
   return (
     <aside className="mt-4 rounded-2xl border border-alert px-4 py-4">
       <p className="font-medium text-ivory">
-        {gap
-          ? `Nothing is scheduled until ${resume}.`
-          : "The shuttle should be waiting at the resort employee entrance."}
+        {lot
+          ? "The shuttle should be waiting at the resort employee entrance."
+          : `Nothing is scheduled until ${resume}.`}
       </p>
       <p className="mt-1 text-sm text-pretty text-mute">
-        If you don't see it, call for an employee pickup from the lot.
+        {lot
+          ? "If you don't see it, call for an employee pickup from the lot."
+          : "If you still need a ride, call dispatch."}
       </p>
       <a
         href={`tel:+1${DISPATCH_PHONE}`}
@@ -715,11 +865,11 @@ function BoardList({
   listRef: RefObject<HTMLUListElement | null>;
   nextRow: RefObject<HTMLLIElement | null>;
 }) {
-  const times = DEPARTURES[direction];
+  const times = [...DEPARTURES[direction]].sort((a, b) => serviceRank(a) - serviceRank(b));
   const tone = columnTone(direction);
   const groups: { label: string; times: number[] }[] = [];
   for (const time of times) {
-    const label = daypart(time);
+    const label = listLabel(time);
     const last = groups[groups.length - 1];
     if (!last || last.label !== label) groups.push({ label, times: [time] });
     else last.times.push(time);
@@ -738,7 +888,7 @@ function BoardList({
           <ul>
             {group.times.map((time) => {
               const isNext = time === next.minutes;
-              const past = time * 60 + 45 < nowSec && !isNext;
+              const past = isDeparturePast(time, nowSec, next.minutes);
               return (
                 <li
                   key={time}
@@ -829,6 +979,12 @@ function placeDetail(place: PlaceState, mode: Mode, fix: Fix | null): string {
       return where ? `${where} · parking-lot column` : "Showing buses that leave the lot";
     case "denied":
       return "Allow location, or use the switch. It will stick.";
+    case "timeout":
+      return "That reading was too slow. Try again, or use the switch.";
+    case "unavailable":
+      return "This phone couldn't get a position. Use the switch.";
+    case "idle":
+      return "Turn location on if you want the column picked for you.";
     default:
       return "Use the switch. It will stick on this phone.";
   }

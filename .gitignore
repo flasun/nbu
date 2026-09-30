@@ -3,3 +3,11 @@ node_modules/
 .github_repo
 .env
 .env.*
+.vercel/
+# Internal employer sheet. The board does not read this file.
+attachments/
+
+# Local QA shots. They can show the dispatch number and the full board.
+screenshots/
+.grok/preview.log
+.grok/og-pending
