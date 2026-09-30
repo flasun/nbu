@@ -1,0 +1,17 @@
+{
+  "name": "Next Bus Up",
+  "short_name": "Next Bus Up",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#10140f",
+  "theme_color": "#10140f",
+  "icons": [
+    {
+      "src": "/__grok/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

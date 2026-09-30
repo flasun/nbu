@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+
+  --color-ink: #10140f;
+  --color-panel: #1a2118;
+  --color-panel-2: #243026;
+  --color-line: #334033;
+  --color-ivory: #f4f1e6;
+  --color-mute: #c3cfb8;
+  --color-signal: #dff25a;
+  --color-signal-ink: #1a2208;
+  --color-lot: #dff25a;
+  --color-lot-ink: #1a2208;
+  --color-gate: #6ec8ff;
+  --color-gate-ink: #041820;
+  --color-alert: #ff5c3a;
+
+  --radius-card: 1.25rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-ink);
+    color: var(--color-ivory);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input[type="time"] {
+    color-scheme: dark;
+  }
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-dot {
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
