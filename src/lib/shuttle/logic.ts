@@ -32,7 +32,7 @@ export type BusHit = {
 export type BoardSnapshot = {
   direction: Direction;
   inGap: boolean;
-  /** Lot side after the 11:50 PM bus, until the 3:00 AM restart. */
+  /** Lot side after the 11:50 PM bus, until the gap. Off while nothing is running. */
   lotCallout: boolean;
   /** Entrance side from midnight until the 1:30 AM bus. */
   entranceStationed: boolean;
@@ -243,13 +243,16 @@ export function listLabel(minutes: number): string {
 }
 
 /**
- * A printed time is already gone for this service day.
+ * A departure is already gone for this service day.
+ * If the next bus is on the following service day, nothing on the list has left.
  * After midnight, buses at 12:00–1:30 are still ahead of an 11 PM rider.
  * `nextMinutes` stays highlighted even when the row is the restart at 3:00.
  */
 export function isDeparturePast(minutes: number, nowSec: number, nextMinutes: number): boolean {
   if (minutes === nextMinutes) return false;
   const now = ((nowSec % 86400) + 86400) % 86400;
+  const nowMinutes = Math.floor(now / 60);
+  if (serviceRank(nextMinutes) < serviceRank(nowMinutes)) return false;
   const timeSec = minutes * 60;
   const start = GAP_END_MIN * 60;
   if (now >= start) {
@@ -314,7 +317,11 @@ export function boardAt(
     direction === "from-hotel" ? GAP_START_MIN * 60 + GRACE_SEC : GAP_START_MIN * 60;
   const inGap = now >= gapStart && now < GAP_END_MIN * 60;
   const lotCallout =
-    direction === "to-hotel" && !next.boarding && next.minutes === GAP_END_MIN && next.waitSec >= LONG_WAIT_SEC;
+    !inGap &&
+    direction === "to-hotel" &&
+    !next.boarding &&
+    next.minutes === GAP_END_MIN &&
+    next.waitSec >= LONG_WAIT_SEC;
   const entranceStationed = direction === "from-hotel" && now < GAP_START_MIN * 60;
 
   let progress: number | null = null;

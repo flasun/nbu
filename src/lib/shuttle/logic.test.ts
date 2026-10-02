@@ -69,7 +69,8 @@ describe("boardAt", () => {
     const lot = boardAt("to-hotel", min("2:00AM") * 60, 3);
     assert.equal(lot.inGap, true);
     assert.equal(lot.next.minutes, min("3:00AM"));
-    assert.equal(lot.lotCallout, true);
+    assert.equal(lot.lotCallout, false);
+    assert.equal(mid.entranceStationed, false);
   });
 
   it("still runs the entrance through the stationed window", () => {
@@ -116,6 +117,50 @@ describe("boardAt", () => {
     assert.equal(isDeparturePast(min("12:00AM"), now, board.next.minutes), true);
     assert.equal(isDeparturePast(min("12:15AM"), now, board.next.minutes), false);
     assert.equal(isDeparturePast(min("5:00AM"), now, board.next.minutes), true);
+  });
+
+  it("does not mark tomorrow's lot buses as left after the 11:50 PM departure", () => {
+    const now = min("11:55PM") * 60;
+    const board = boardAt("to-hotel", now, 3);
+    assert.equal(board.next.minutes, min("3:00AM"));
+    for (const clock of ["3:00AM", "3:30AM", "4:00AM", "4:40AM", "5:00AM", "11:50PM"]) {
+      assert.equal(isDeparturePast(min(clock), now, board.next.minutes), false, clock);
+    }
+  });
+
+  it("still dims a lot bus that has already left in the morning", () => {
+    const now = min("7:22AM") * 60;
+    const board = boardAt("to-hotel", now, 3);
+    assert.equal(isDeparturePast(min("7:20AM"), now, board.next.minutes), true);
+    assert.equal(isDeparturePast(min("7:30AM"), now, board.next.minutes), false);
+  });
+
+  it("keeps the entrance's after-midnight buses ahead at 11:45 PM", () => {
+    const now = min("11:45PM") * 60;
+    const board = boardAt("from-hotel", now, 3);
+    for (const clock of ["12:00AM", "12:15AM", "12:30AM", "12:50AM", "1:10AM", "1:30AM"]) {
+      assert.equal(isDeparturePast(min(clock), now, board.next.minutes), false, clock);
+    }
+  });
+
+  it("dims an entrance bus only after it has left, just after midnight", () => {
+    const now = min("12:40AM") * 60;
+    const board = boardAt("from-hotel", now, 3);
+    assert.equal(board.next.minutes, min("12:50AM"));
+    assert.equal(isDeparturePast(min("12:30AM"), now, board.next.minutes), true);
+    assert.equal(isDeparturePast(min("12:50AM"), now, board.next.minutes), false);
+  });
+
+  it("hides the lot callout during the overnight gap", () => {
+    const gap = boardAt("to-hotel", min("2:00AM") * 60, 3);
+    assert.equal(gap.inGap, true);
+    assert.equal(gap.lotCallout, false);
+    const stationed = boardAt("to-hotel", min("12:30AM") * 60, 3);
+    assert.equal(stationed.inGap, false);
+    assert.equal(stationed.lotCallout, true);
+    const entrance = boardAt("from-hotel", min("2:00AM") * 60, 3);
+    assert.equal(entrance.inGap, true);
+    assert.equal(entrance.entranceStationed, false);
   });
 
   it("points a missed walk at the next bus you can still catch", () => {

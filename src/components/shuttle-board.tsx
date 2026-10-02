@@ -801,7 +801,9 @@ function Hero({
           <p className="mt-1 text-sm text-pretty text-mute">Next one is {formatClock(board.next.minutes)}.</p>
         </aside>
       ) : null}
-      <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
+      {board.inGap ? null : (
+        <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
+      )}
       {board.following.length > 0 && !board.inGap ? (
         <ul className="mt-4 flex flex-wrap gap-2" aria-label="Next three departures">
           {board.following.map((hit) => (
@@ -832,20 +834,18 @@ function Callout({ kind, resume }: { kind: "gap" | "lot"; resume: string }) {
           ? "The shuttle should be waiting at the resort employee entrance."
           : `Nothing is scheduled until ${resume}.`}
       </p>
-      {lot ? (
-        <>
-          <p className="mt-1 text-sm text-pretty text-mute">
-            If you don't see it, call for an employee pickup from the lot.
-          </p>
-          <a
-            href={`tel:+1${DISPATCH_PHONE}`}
-            className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink ${focusRing}`}
-          >
-            <Phone className="size-4" aria-hidden="true" />
-            Call {DISPATCH_DISPLAY}
-          </a>
-        </>
-      ) : null}
+      <p className="mt-1 text-sm text-pretty text-mute">
+        {lot
+          ? "If you don't see it, call for an employee pickup from the lot."
+          : "If you still need a ride, call dispatch."}
+      </p>
+      <a
+        href={`tel:+1${DISPATCH_PHONE}`}
+        className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink ${focusRing}`}
+      >
+        <Phone className="size-4" aria-hidden="true" />
+        Call {DISPATCH_DISPLAY}
+      </a>
     </aside>
   );
 }
