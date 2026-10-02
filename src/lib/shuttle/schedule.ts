@@ -18,6 +18,9 @@ export const DISPATCH_DISPLAY = "407.313.6990";
 export const FEEDBACK_FORM =
   "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=fRDAONGBn0GLcopJHclgPALwRnbt23dBmi9vnjK6eRNUN0wxM09FUFREVjEzQ1IwU1dDSllOTEFBVC4u";
 
+/** Questions about this board. Not the Skyline bus form. */
+export const CONTACT_FORM = "https://forms.gle/qV3n5Md74r2ovDji9";
+
 export const TZ = "America/New_York";
 
 /** Employee bus stop at the hotel on Dream Tree Blvd. */

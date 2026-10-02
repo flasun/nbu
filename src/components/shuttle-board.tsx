@@ -15,6 +15,7 @@ import {
 import {
   DEPARTURES,
   DIRECTION_COPY,
+  CONTACT_FORM,
   DISPATCH_DISPLAY,
   DISPATCH_PHONE,
   FEEDBACK_FORM,
@@ -687,7 +688,19 @@ export function ShuttleBoard() {
           P&C.
         </span>
       </p>
-      <p className="mt-6 text-xs text-mute">Built with Grok</p>
+      <p className="mt-3 text-sm text-mute">
+        <a
+          href={CONTACT_FORM}
+          target="_blank"
+          rel="noreferrer"
+          className={`text-ivory underline ${focusRing}`}
+        >
+          App feedback
+        </a>
+        <span className="mt-0.5 block">
+          About this board, not the bus. Bugs, ideas, or a comment.
+        </span>
+      </p>
     </main>
   );
 }
