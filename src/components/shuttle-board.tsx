@@ -17,10 +17,9 @@ import {
   DIRECTION_COPY,
   DISPATCH_DISPLAY,
   DISPATCH_PHONE,
+  FEEDBACK_FORM,
   HOTEL,
   LOT,
-  SHEET_LABEL,
-  SHEET_STALE_DAYS,
   type Direction,
 } from "@/lib/shuttle/schedule";
 import {
@@ -35,7 +34,6 @@ import {
   readOrlando,
   resolveDirection,
   serviceRank,
-  sheetIsStale,
   zoneFor,
   atOrlandoTime,
   type BoardSnapshot,
@@ -431,10 +429,6 @@ export function ShuttleBoard() {
           </h1>
           <p className="mt-1 text-sm text-mute">Dream Tree edition</p>
         </div>
-        <p className="text-right text-sm text-mute">
-          {SHEET_LABEL}
-          <span className="mt-0.5 block">printed sheet</span>
-        </p>
       </header>
 
       <section className="mb-4 rounded-card border border-line bg-panel px-5 py-4">
@@ -445,15 +439,6 @@ export function ShuttleBoard() {
           <span className="live-dot inline-block size-2 rounded-full bg-signal" aria-hidden="true" />
           {live ? `${live.weekday} · ${live.dateLabel}` : "Orlando"} · Orlando time
         </p>
-        <p className="mt-3 text-sm text-pretty text-ivory">
-          Schedule as of Apr 28, 2026 — not a live tracker.
-        </p>
-        {live && sheetIsStale(live.epochMs) ? (
-          <p className="mt-2 text-sm text-pretty text-alert">
-            This sheet is from {SHEET_LABEL}, more than {SHEET_STALE_DAYS} days ago. Check with dispatch
-            before you trust it.
-          </p>
-        ) : null}
       </section>
 
       <div className="grid items-start gap-4 lg:grid-cols-5">
@@ -677,8 +662,7 @@ export function ShuttleBoard() {
             when a bus is 5 minutes, 2 minutes, and 30 seconds out, and only while this page is open.
           </p>
           <p>
-            Times are the {SHEET_LABEL} sheet, shown in Orlando time even if your phone is set
-            somewhere else. This is not a live tracker of the bus itself. Nothing runs 1:30–3:00 AM.
+            Shown in Orlando time even if your phone is set somewhere else. Nothing runs 1:30–3:00 AM.
             After 11:50 PM the lot has no departure until 3:00 AM.
           </p>
         </div>
@@ -688,6 +672,20 @@ export function ShuttleBoard() {
         <a href={`tel:+1${DISPATCH_PHONE}`} className={`text-ivory underline ${focusRing}`}>
           {DISPATCH_DISPLAY}
         </a>
+      </p>
+      <p className="mt-3 text-sm text-mute">
+        <a
+          href={FEEDBACK_FORM}
+          target="_blank"
+          rel="noreferrer"
+          className={`text-ivory underline ${focusRing}`}
+        >
+          Shoutout and feedback
+        </a>
+        <span className="mt-0.5 block">
+          Skyline form from the bus QR. Put your name, the shuttle time, and what happened. It goes to
+          P&C.
+        </span>
       </p>
       <p className="mt-6 text-xs text-mute">Built with Grok</p>
     </main>
@@ -800,9 +798,7 @@ function Hero({
           <p className="font-medium text-ivory">
             The lot has no bus until 3:00 AM. This column still leaves from the employee entrance.
           </p>
-          <p className="mt-1 text-sm text-pretty text-mute">
-            Next one is {formatClock(board.next.minutes)}. Call dispatch only if it is not at the entrance.
-          </p>
+          <p className="mt-1 text-sm text-pretty text-mute">Next one is {formatClock(board.next.minutes)}.</p>
         </aside>
       ) : null}
       <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
@@ -836,18 +832,20 @@ function Callout({ kind, resume }: { kind: "gap" | "lot"; resume: string }) {
           ? "The shuttle should be waiting at the resort employee entrance."
           : `Nothing is scheduled until ${resume}.`}
       </p>
-      <p className="mt-1 text-sm text-pretty text-mute">
-        {lot
-          ? "If you don't see it, call for an employee pickup from the lot."
-          : "If you still need a ride, call dispatch."}
-      </p>
-      <a
-        href={`tel:+1${DISPATCH_PHONE}`}
-        className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink ${focusRing}`}
-      >
-        <Phone className="size-4" aria-hidden="true" />
-        Call {DISPATCH_DISPLAY}
-      </a>
+      {lot ? (
+        <>
+          <p className="mt-1 text-sm text-pretty text-mute">
+            If you don't see it, call for an employee pickup from the lot.
+          </p>
+          <a
+            href={`tel:+1${DISPATCH_PHONE}`}
+            className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink ${focusRing}`}
+          >
+            <Phone className="size-4" aria-hidden="true" />
+            Call {DISPATCH_DISPLAY}
+          </a>
+        </>
+      ) : null}
     </aside>
   );
 }

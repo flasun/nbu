@@ -14,6 +14,10 @@ export const SHEET_STALE_DAYS = 45;
 export const DISPATCH_PHONE = "4073136990";
 export const DISPATCH_DISPLAY = "407.313.6990";
 
+/** Shoutout and feedback form printed on the bus. One QR. */
+export const FEEDBACK_FORM =
+  "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=fRDAONGBn0GLcopJHclgPALwRnbt23dBmi9vnjK6eRNUN0wxM09FUFREVjEzQ1IwU1dDSllOTEFBVC4u";
+
 export const TZ = "America/New_York";
 
 /** Employee bus stop at the hotel on Dream Tree Blvd. */
