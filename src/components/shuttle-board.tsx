@@ -629,23 +629,27 @@ export function ShuttleBoard() {
         </div>
 
         <section className="lg:col-span-2">
-          <div className="mb-2 flex items-baseline justify-between px-1">
-            <h2 className="font-medium text-ivory">{copy ? copy.stop : "Today's board"}</h2>
-            <p className="text-sm text-mute">{copy ? copy.leaves : "One column"}</p>
-          </div>
-          {direction && board ? (
-            <BoardList
-              direction={direction}
-              nowSec={viewSec ?? 0}
-              next={board.next}
-              listRef={listRef}
-              nextRow={nextRow}
-            />
-          ) : (
-            <p className="rounded-card border border-line bg-panel px-4 py-6 text-sm text-mute">
-              The full board shows up once a column is selected. Only that column — never both.
-            </p>
-          )}
+          <details className="rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
+            <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
+              Today's times
+            </summary>
+            <div className="mt-3">
+              <p className="mb-2 text-sm text-mute">{copy ? copy.leaves : "One column"}</p>
+              {direction && board ? (
+                <BoardList
+                  direction={direction}
+                  nowSec={viewSec ?? 0}
+                  next={board.next}
+                  listRef={listRef}
+                  nextRow={nextRow}
+                />
+              ) : (
+                <p className="text-sm text-mute">
+                  The full board shows up once a column is selected. Only that column — never both.
+                </p>
+              )}
+            </div>
+          </details>
         </section>
       </div>
 
@@ -668,39 +672,69 @@ export function ShuttleBoard() {
           </p>
         </div>
       </details>
-      <p className="mt-4 text-sm text-mute">
-        Dispatch{" "}
-        <a href={`tel:+1${DISPATCH_PHONE}`} className={`text-ivory underline ${focusRing}`}>
-          {DISPATCH_DISPLAY}
-        </a>
-      </p>
-      <p className="mt-3 text-sm text-mute">
-        <a
-          href={FEEDBACK_FORM}
-          target="_blank"
-          rel="noreferrer"
-          className={`text-ivory underline ${focusRing}`}
-        >
-          Shoutout and feedback
-        </a>
-        <span className="mt-0.5 block">
-          Skyline form from the bus QR. Put your name, the shuttle time, and what happened. It goes to
-          P&C.
-        </span>
-      </p>
-      <p className="mt-3 text-sm text-mute">
-        <a
-          href={CONTACT_FORM}
-          target="_blank"
-          rel="noreferrer"
-          className={`text-ivory underline ${focusRing}`}
-        >
-          App feedback
-        </a>
-        <span className="mt-0.5 block">
-          About this board, not the bus. Bugs, ideas, or a comment.
-        </span>
-      </p>
+      <details className="mt-3 rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
+        <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>Contact</summary>
+        <div className="mt-3 space-y-3 text-pretty">
+          <p>
+            Dispatch{" "}
+            <a href={`tel:+1${DISPATCH_PHONE}`} className={`text-ivory underline ${focusRing}`}>
+              {DISPATCH_DISPLAY}
+            </a>
+          </p>
+          <p>
+            <a
+              href={FEEDBACK_FORM}
+              target="_blank"
+              rel="noreferrer"
+              className={`text-ivory underline ${focusRing}`}
+            >
+              Shoutout and feedback
+            </a>
+            <span className="mt-0.5 block">
+              Skyline form from the bus QR. Put your name, the shuttle time, and what happened. It
+              goes to P&C.
+            </span>
+          </p>
+          <p>
+            <a
+              href={CONTACT_FORM}
+              target="_blank"
+              rel="noreferrer"
+              className={`text-ivory underline ${focusRing}`}
+            >
+              App feedback
+            </a>
+            <span className="mt-0.5 block">
+              About this board, not the bus. Bugs, ideas, or a comment.
+            </span>
+          </p>
+        </div>
+      </details>
+      <details className="mt-3 rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
+        <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
+          Add it to your phone
+        </summary>
+        <div className="mt-3 space-y-2 text-pretty">
+          <p>
+            Opens full screen, like an app. The countdown is one tap away, and it still works when the
+            lot has a weak signal.
+          </p>
+          <p>An icon already on your home screen will not change. Delete it, then add it again.</p>
+          <details className="rounded-card border border-line bg-panel-2 px-3 py-2">
+            <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>Apple</summary>
+            <p className="mt-2">
+              Open this page in Safari. Share, then Add to Home Screen. Chrome on an iPhone cannot
+              set the icon.
+            </p>
+          </details>
+          <details className="rounded-card border border-line bg-panel-2 px-3 py-2">
+            <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
+              Android
+            </summary>
+            <p className="mt-2">In Chrome: menu, then Install app.</p>
+          </details>
+        </div>
+      </details>
     </main>
   );
 }
@@ -889,7 +923,7 @@ function BoardList({
   return (
     <ul
       ref={listRef}
-      className="relative max-h-96 overflow-auto rounded-card border border-line bg-panel"
+      className="relative max-h-96 overflow-auto rounded-2xl border border-line"
     >
       {groups.map((group) => (
         <li key={group.label} className="list-none">

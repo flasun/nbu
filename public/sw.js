@@ -1,4 +1,4 @@
-const CACHE = "nbu-shell-v1";
+const CACHE = "nbu-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
