@@ -1,4 +1,4 @@
-import { DEPARTURES, HOTEL, LOT, SHEET_ISO, SHEET_STALE_DAYS, TZ, type Direction } from "./schedule.ts";
+import { DEPARTURES, HOTEL, LOT, SHEET_ISO, TZ, type Direction } from "./schedule.ts";
 
 export const GRACE_SEC = 45;
 /** Red banner on the sheet: no bus 1:30 AM–3:00 AM. */
@@ -144,6 +144,41 @@ export function zoneFor(hotelM: number, lotM: number, accuracyM: number): Zone {
   return "away";
 }
 
+/** Distance to the stop this column leaves from. */
+export function stopDistance(direction: Direction, hotelM: number, lotM: number): number {
+  return direction === "to-hotel" ? lotM : hotelM;
+}
+
+/** Within this many meters of the stop, counting GPS error, the walk is zero. */
+export const AT_STOP_M = 75;
+
+export function isAtStop(stopM: number, accuracyM: number): boolean {
+  return stopM + Math.max(0, accuracyM) <= AT_STOP_M;
+}
+
+export type MapApp = "apple" | "google";
+
+/**
+ * Directions to the stop a column leaves from. Only the stop's coordinates go in the
+ * link: no place name, and nothing about the rider. People drive to the lot and walk
+ * to the employee entrance.
+ */
+export function directionsUrl(direction: Direction, app: MapApp): string {
+  const stop = direction === "to-hotel" ? LOT : HOTEL;
+  const where = `${stop.lat},${stop.lon}`;
+  const drive = direction === "to-hotel";
+  if (app === "apple") return `https://maps.apple.com/?daddr=${where}&dirflg=${drive ? "d" : "w"}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${where}&travelmode=${drive ? "driving" : "walking"}`;
+}
+
+/** `?dir=to` or `?dir=from`, from a stop's QR code or a home-screen shortcut. */
+export function directionFromSearch(search: string): Direction | null {
+  const value = new URLSearchParams(search).get("dir")?.trim().toLowerCase();
+  if (value === "to" || value === "to-hotel" || value === "lot") return "to-hotel";
+  if (value === "from" || value === "from-hotel" || value === "entrance") return "from-hotel";
+  return null;
+}
+
 export function resolveDirection(mode: Mode, place: PlaceState): Direction | null {
   if (mode === "to-hotel" || mode === "from-hotel") return mode;
   if (place === "at-hotel") return "from-hotel";
@@ -226,10 +261,11 @@ function departureUtc(nowMs: number, dayOffset: number, minutes: number): number
   return zonedWallToUtc(date.year, date.month, date.day, Math.floor(minutes / 60), minutes % 60, 0);
 }
 
-export function sheetIsStale(nowMs: number, afterDays = SHEET_STALE_DAYS): boolean {
-  const [year, month, day] = SHEET_ISO.split("-").map(Number);
-  const sheetMs = zonedWallToUtc(year, month, day, 12, 0, 0);
-  return nowMs - sheetMs >= afterDays * 86_400_000;
+/** "2026-04-28" → "4.28.26", the way the sheet date reads on the board. */
+export function formatSheetDate(iso: string = SHEET_ISO): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  return `${Number(match[2])}.${Number(match[3])}.${match[1].slice(2)}`;
 }
 
 /** Order a service day from the 3:00 AM restart through the after-midnight buses. */

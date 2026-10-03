@@ -10,4 +10,5 @@ attachments/
 # Local QA shots. They can show the dispatch number and the full board.
 screenshots/
 .grok/preview.log
+.grok/preview.pid
 .grok/og-pending

@@ -8,6 +8,7 @@ import {
   Lock,
   MapPin,
   Minus,
+  Navigation,
   Phone,
   Plus,
   Unlock,
@@ -21,23 +22,30 @@ import {
   FEEDBACK_FORM,
   HOTEL,
   LOT,
+  RIDE_MIN,
   type Direction,
 } from "@/lib/shuttle/schedule";
 import {
   boardAt,
+  directionFromSearch,
+  directionsUrl,
   formatClock,
   formatCountdown,
   formatDistance,
+  formatSheetDate,
   geoFailure,
   haversineMeters,
+  isAtStop,
   isDeparturePast,
   listLabel,
   readOrlando,
   resolveDirection,
   serviceRank,
+  stopDistance,
   zoneFor,
   atOrlandoTime,
   type BoardSnapshot,
+  type MapApp,
   type Mode,
   type OrlandoNow,
   type PlaceState,
@@ -138,9 +146,10 @@ function agoLabel(seconds: number): string {
   return `${minutes} min ago`;
 }
 
-function walkLine(board: BoardSnapshot): { late: boolean; text: string } {
+function walkLine(board: BoardSnapshot, atStop: boolean): { late: boolean; text: string } {
   if (board.inGap) return { late: false, text: "Nothing is running in this window." };
   if (board.next.boarding) return { late: false, text: "It's at the stop." };
+  if (atStop) return { late: false, text: "You're at the stop." };
   if (board.next.waitSec > 30 * 60) {
     return { late: false, text: "Plenty of time before you need to head out." };
   }
@@ -207,6 +216,8 @@ export function ShuttleBoard() {
   const [wakeNote, setWakeNote] = useState<string | null>(null);
   const [chimeArmed, setChimeArmed] = useState(false);
   const [locateNonce, setLocateNonce] = useState(0);
+  const [mapApp, setMapApp] = useState<MapApp>("google");
+  const [timesOpen, setTimesOpen] = useState(false);
   const nextRow = useRef<HTMLLIElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
@@ -216,8 +227,22 @@ export function ShuttleBoard() {
   const locateGen = useRef(0);
 
   useEffect(() => {
-    setPrefs(loadPrefs());
+    const saved = loadPrefs();
+    const linked = directionFromSearch(window.location.search);
+    if (linked) {
+      // A stop's QR code or a home-screen shortcut picks the column, like tapping it.
+      saved.mode = linked;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("dir");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    setPrefs(saved);
     setHydrated(true);
+    const ua = navigator.userAgent;
+    if (/iP(hone|ad|od)/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1)) {
+      setMapApp("apple");
+    }
+    if (window.matchMedia("(min-width: 1024px)").matches) setTimesOpen(true);
   }, []);
 
   useEffect(() => {
@@ -227,7 +252,7 @@ export function ShuttleBoard() {
 
   useEffect(() => {
     if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
-    void navigator.serviceWorker.register("/sw.js").catch(() => {});
+    void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -304,6 +329,11 @@ export function ShuttleBoard() {
   }, [prefs.awake]);
 
   const direction = resolveDirection(prefs.mode, place);
+  const atStop =
+    direction !== null &&
+    fix !== null &&
+    isAtStop(stopDistance(direction, fix.hotelM, fix.lotM), fix.accuracyM);
+  const walkMin = atStop ? 0 : prefs.walkMin;
   const planMin = /^(\d{2}):(\d{2})$/.exec(plan);
   const viewSec = planMin
     ? Number(planMin[1]) * 3600 + Number(planMin[2]) * 60
@@ -315,7 +345,7 @@ export function ShuttleBoard() {
         ? atOrlandoTime(live.epochMs, Number(planMin[1]), Number(planMin[2]))
         : live.epochMs;
   const board =
-    direction !== null && viewSec !== null ? boardAt(direction, viewSec, prefs.walkMin, viewMs) : null;
+    direction !== null && viewSec !== null ? boardAt(direction, viewSec, walkMin, viewMs) : null;
 
   useEffect(() => {
     if (!board || plan || !prefs.chime || !chimeArmed || !audioRef.current) {
@@ -423,24 +453,26 @@ export function ShuttleBoard() {
         {summary}
       </p>
 
-      <header className="mb-5 flex items-end justify-between gap-4">
+      <header className="mb-4 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display text-[1.85rem] leading-none font-semibold tracking-wide text-ivory sm:text-4xl">
             Next Bus Up
           </h1>
           <p className="mt-1 text-sm text-mute">Dream Tree edition</p>
         </div>
+        <div className="shrink-0 text-right">
+          <p
+            className="font-display text-2xl leading-none font-semibold tracking-wide text-ivory tabular-nums sm:text-3xl"
+            data-testid="clock"
+          >
+            {live ? live.clock : "––:––:––"}
+          </p>
+          <p className="mt-1 flex items-center justify-end gap-1.5 text-xs text-mute">
+            <span className="live-dot inline-block size-1.5 rounded-full bg-signal" aria-hidden="true" />
+            {live ? `${live.weekday.slice(0, 3)} · ${live.dateLabel}` : "Orlando"} · Orlando time
+          </p>
+        </div>
       </header>
-
-      <section className="mb-4 rounded-card border border-line bg-panel px-5 py-4">
-        <p className="font-display text-5xl leading-none font-semibold tracking-wide text-ivory tabular-nums md:text-6xl" data-testid="clock">
-          {live ? live.clock : "––:––:––"}
-        </p>
-        <p className="mt-2 flex items-center gap-2 text-sm text-mute">
-          <span className="live-dot inline-block size-2 rounded-full bg-signal" aria-hidden="true" />
-          {live ? `${live.weekday} · ${live.dateLabel}` : "Orlando"} · Orlando time
-        </p>
-      </section>
 
       <div className="grid items-start gap-4 lg:grid-cols-5">
         <div className="lg:col-span-3">
@@ -478,11 +510,83 @@ export function ShuttleBoard() {
           <p className="mt-2 px-1 text-sm text-mute">
             {copy ? copy.column : "Pick one column. The other stays hidden so it can't be misread."}
           </p>
-          <ul className="mt-3 space-y-1 px-1 text-sm text-ivory">
-            <li>At the employee entrance → From hotel</li>
-            <li>At the lot → To hotel</li>
-            <li>Anywhere else → assumes lot until you lock it</li>
-          </ul>
+
+          {mismatch ? (
+            <p className="mt-2 px-1 text-sm text-alert">
+              {place === "at-hotel"
+                ? "You're at the hotel stop, but this column is locked to the parking lot."
+                : place === "at-lot"
+                  ? "You're at the lot pickup, but this column is locked to the employee entrance."
+                  : "You're not at the hotel stop, but this column is locked to the employee entrance."}
+            </p>
+          ) : null}
+
+          <section className="mt-3 rounded-card border border-line bg-panel px-5 py-5" aria-live="off">
+            {plan ? (
+              <p className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-panel-2 px-3 py-2 text-sm text-ivory">
+                <span>Checking {formatPlan(plan)} instead of now.</span>
+                <button
+                  type="button"
+                  onClick={() => setPlan("")}
+                  className={`min-h-11 rounded-full px-3 font-medium text-signal ${focusRing}`}
+                >
+                  Back to now
+                </button>
+              </p>
+            ) : null}
+
+            {!board || !copy || !direction ? (
+              <div>
+                <p className="font-display text-3xl leading-none font-semibold tracking-wide text-ivory">
+                  Pick a side
+                </p>
+                <p className="mt-3 max-w-sm text-pretty text-mute">
+                  To hotel if you're heading to the shuttle lot. From hotel if you're at the employee
+                  entrance on Dream Tree Blvd.
+                </p>
+              </div>
+            ) : (
+              <Hero
+                board={board}
+                copy={copy}
+                atStop={atStop}
+                mapHref={directionsUrl(direction, mapApp)}
+              />
+            )}
+
+            {board ? (
+              <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
+                <p className="text-sm text-mute">
+                  Minutes to reach the stop
+                  {atStop ? <span className="block text-xs">Skipped while you're at the stop</span> : null}
+                </p>
+                <div className="flex items-center gap-2">
+                  <StepButton
+                    label="Fewer minutes to the stop"
+                    onClick={() =>
+                      setPrefs((prev) => ({ ...prev, walkMin: Math.max(0, prev.walkMin - 1) }))
+                    }
+                  >
+                    <Minus className="size-4" aria-hidden="true" />
+                  </StepButton>
+                  <span className="w-8 text-center font-display text-2xl leading-none font-semibold tabular-nums">
+                    {prefs.walkMin}
+                  </span>
+                  <StepButton
+                    label="More minutes to the stop"
+                    onClick={() =>
+                      setPrefs((prev) => ({ ...prev, walkMin: Math.min(15, prev.walkMin + 1) }))
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                  </StepButton>
+                </div>
+              </div>
+            ) : null}
+          </section>
+          <p className="mt-2 px-1 text-xs text-mute" data-testid="sheet-date">
+            Times published/updated as of {formatSheetDate()}
+          </p>
 
           <div className="mt-4 flex items-start justify-between gap-3 rounded-card border border-line bg-panel px-4 py-3">
             <div className="flex min-w-0 gap-3">
@@ -525,72 +629,6 @@ export function ShuttleBoard() {
             )}
           </div>
 
-          {mismatch ? (
-            <p className="mt-2 px-1 text-sm text-alert">
-              {place === "at-hotel"
-                ? "You're at the hotel stop, but this column is locked to the parking lot."
-                : place === "at-lot"
-                  ? "You're at the lot pickup, but this column is locked to the employee entrance."
-                  : "You're not at the hotel stop, but this column is locked to the employee entrance."}
-            </p>
-          ) : null}
-
-          <section className="mt-4 rounded-card border border-line bg-panel px-5 py-5" aria-live="off">
-            {plan ? (
-              <p className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-panel-2 px-3 py-2 text-sm text-ivory">
-                <span>Checking {formatPlan(plan)} instead of now.</span>
-                <button
-                  type="button"
-                  onClick={() => setPlan("")}
-                  className={`min-h-11 rounded-full px-3 font-medium text-signal ${focusRing}`}
-                >
-                  Back to now
-                </button>
-              </p>
-            ) : null}
-
-            {!board || !copy ? (
-              <div>
-                <p className="font-display text-3xl leading-none font-semibold tracking-wide text-ivory">
-                  Pick a side
-                </p>
-                <p className="mt-3 max-w-sm text-pretty text-mute">
-                  To hotel if you're heading to the shuttle lot. From hotel if you're at the employee
-                  entrance on Dream Tree Blvd.
-                </p>
-              </div>
-            ) : (
-              <Hero board={board} copy={copy} />
-            )}
-
-            {board ? (
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
-                <p className="text-sm text-mute">Minutes to reach the stop</p>
-                <div className="flex items-center gap-2">
-                  <StepButton
-                    label="Fewer minutes to the stop"
-                    onClick={() =>
-                      setPrefs((prev) => ({ ...prev, walkMin: Math.max(0, prev.walkMin - 1) }))
-                    }
-                  >
-                    <Minus className="size-4" aria-hidden="true" />
-                  </StepButton>
-                  <span className="w-8 text-center font-display text-2xl leading-none font-semibold tabular-nums">
-                    {prefs.walkMin}
-                  </span>
-                  <StepButton
-                    label="More minutes to the stop"
-                    onClick={() =>
-                      setPrefs((prev) => ({ ...prev, walkMin: Math.min(15, prev.walkMin + 1) }))
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden="true" />
-                  </StepButton>
-                </div>
-              </div>
-            ) : null}
-          </section>
-
           <div className="mt-4 grid grid-cols-2 gap-2">
             <ToolButton
               pressed={prefs.awake}
@@ -629,7 +667,11 @@ export function ShuttleBoard() {
         </div>
 
         <section className="lg:col-span-2">
-          <details className="rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
+          <details
+            open={timesOpen}
+            onToggle={(event) => setTimesOpen(event.currentTarget.open)}
+            className="rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute"
+          >
             <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
               Today's times
             </summary>
@@ -658,9 +700,19 @@ export function ShuttleBoard() {
           How the column gets picked
         </summary>
         <div className="mt-3 space-y-2 text-pretty">
+          <p>With location on, the column follows where you are:</p>
+          <ul className="space-y-1 text-ivory">
+            <li>At the employee entrance → From hotel</li>
+            <li>At the lot → To hotel</li>
+            <li>Anywhere else → To hotel, until you lock a column</li>
+          </ul>
           <p>
-            At the employee entrance, this shows From hotel. At the lot, To hotel. Anywhere else
-            assumes the lot until you lock a column.
+            With location off, tap a column and it sticks on this phone. A stop's QR code picks the
+            column for you.
+          </p>
+          <p>
+            Your location stays on this phone. It is never sent anywhere. The map link only carries the
+            stop's position.
           </p>
           <p>
             Keep screen on holds the display while you wait at the stop. Chime plays a short tone
@@ -668,7 +720,8 @@ export function ShuttleBoard() {
           </p>
           <p>
             Shown in Orlando time even if your phone is set somewhere else. Nothing runs 1:30–3:00 AM.
-            After 11:50 PM the lot has no departure until 3:00 AM.
+            After 11:50 PM the lot has no departure until 3:00 AM. The ride takes about {RIDE_MIN}{" "}
+            minutes and can run longer.
           </p>
         </div>
       </details>
@@ -791,11 +844,15 @@ function DirectionButton({
 function Hero({
   board,
   copy,
+  atStop,
+  mapHref,
 }: {
   board: BoardSnapshot;
   copy: (typeof DIRECTION_COPY)[Direction];
+  atStop: boolean;
+  mapHref: string;
 }) {
-  const late = walkLine(board);
+  const late = walkLine(board, atStop);
   const hot = !board.next.boarding && board.next.waitSec < 60 && !board.inGap;
   const tone = columnTone(board.direction);
   const eyebrow = board.inGap ? "No bus" : board.next.boarding ? "Leaving now" : `Next bus ${copy.title.toLowerCase()}`;
@@ -808,7 +865,7 @@ function Hero({
         <span className={`live-dot inline-block size-2 rounded-full ${tone.dot}`} aria-hidden="true" />
         {eyebrow}
       </p>
-      <p className="mt-3 font-display text-5xl leading-none font-semibold tracking-wide text-ivory">
+      <p className="mt-3 font-display text-5xl leading-none font-semibold tracking-wide whitespace-nowrap text-ivory">
         {board.inGap ? "1:30–3:00 AM" : formatClock(board.next.minutes)}
         {board.next.tomorrow && !board.inGap ? (
           <span className="ml-2 align-middle font-sans text-base font-medium tracking-normal text-mute normal-case">
@@ -816,10 +873,22 @@ function Hero({
           </span>
         ) : null}
       </p>
-      <p className="mt-2 text-sm text-mute">
-        {board.inGap
-          ? `Back at ${formatClock(board.next.minutes)} · ${copy.stop}`
-          : `Stand at the ${copy.stop.toLowerCase()}`}
+      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-mute">
+        <span>
+          {board.inGap
+            ? `Back at ${formatClock(board.next.minutes)} · ${copy.stop}`
+            : `Stand at the ${copy.stop.toLowerCase()}`}
+        </span>
+        <a
+          href={mapHref}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Directions to the ${copy.stop.toLowerCase()} in your maps app`}
+          className={`inline-flex min-h-11 items-center gap-1 font-medium text-ivory underline underline-offset-4 ${focusRing}`}
+        >
+          <Navigation className="size-3.5" aria-hidden="true" />
+          Map
+        </a>
       </p>
       <p className="mt-5 text-sm text-mute">{countLabel}</p>
       <p
@@ -848,8 +917,14 @@ function Hero({
           <p className="mt-1 text-sm text-pretty text-mute">Next one is {formatClock(board.next.minutes)}.</p>
         </aside>
       ) : null}
-      {board.inGap ? null : (
+      {board.inGap || board.lotCallout ? null : (
         <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
+      )}
+      {board.inGap || board.lotCallout ? null : (
+        <p className="mt-1 text-sm text-mute" data-testid="arrival">
+          {copy.arrives} around {formatClock(board.next.minutes + RIDE_MIN)} · about {RIDE_MIN} min, can
+          run longer
+        </p>
       )}
       {board.following.length > 0 && !board.inGap ? (
         <ul className="mt-4 flex flex-wrap gap-2" aria-label="Next three departures">

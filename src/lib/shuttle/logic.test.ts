@@ -2,15 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DEPARTURES, HOTEL, LOT } from "./schedule.ts";
 import {
+  AT_STOP_M,
   boardAt,
+  directionFromSearch,
+  directionsUrl,
   formatClock,
   formatCountdown,
+  formatSheetDate,
   geoFailure,
   haversineMeters,
+  isAtStop,
   isDeparturePast,
   resolveDirection,
   serviceRank,
-  sheetIsStale,
+  stopDistance,
   zoneFor,
   zonedWallToUtc,
 } from "./logic.ts";
@@ -203,11 +208,61 @@ describe("location", () => {
     assert.equal(geoFailure(1), "denied");
     assert.equal(geoFailure(2), "unavailable");
     assert.equal(geoFailure(3), "timeout");
-    const fresh = zonedWallToUtc(2026, 5, 1, 12, 0, 0);
-    const old = zonedWallToUtc(2026, 9, 30, 12, 0, 0);
-    assert.equal(sheetIsStale(fresh), false);
-    assert.equal(sheetIsStale(old), true);
     const here = haversineMeters(HOTEL.lat, HOTEL.lon, HOTEL.lat, HOTEL.lon);
     assert.equal(here < 1, true);
+  });
+});
+
+describe("at the stop", () => {
+  it("measures from the stop the shown column leaves from", () => {
+    assert.equal(stopDistance("to-hotel", 900, 20), 20);
+    assert.equal(stopDistance("from-hotel", 30, 900), 30);
+  });
+
+  it("zeroes the walk only when the fix, error included, is close to the stop", () => {
+    assert.equal(isAtStop(9, 15), true);
+    assert.equal(isAtStop(AT_STOP_M, 0), true);
+    assert.equal(isAtStop(40, 50), false);
+    assert.equal(isAtStop(5, 200), false);
+    assert.equal(isAtStop(30, -1), true);
+  });
+});
+
+describe("sheet date", () => {
+  it("reads like the printed sheet", () => {
+    assert.equal(formatSheetDate("2026-04-28"), "4.28.26");
+    assert.equal(formatSheetDate("2027-11-05"), "11.5.27");
+    assert.equal(formatSheetDate(), "4.28.26");
+    assert.equal(formatSheetDate("soon"), "soon");
+  });
+});
+
+describe("map links", () => {
+  it("carries only the stop's coordinates", () => {
+    const lot = directionsUrl("to-hotel", "google");
+    assert.ok(lot.startsWith("https://www.google.com/maps/dir/?api=1&"));
+    assert.ok(lot.includes(`destination=${LOT.lat},${LOT.lon}`));
+    assert.ok(lot.includes("travelmode=driving"));
+    const entrance = directionsUrl("from-hotel", "apple");
+    assert.ok(entrance.startsWith("https://maps.apple.com/?"));
+    assert.ok(entrance.includes(`daddr=${HOTEL.lat},${HOTEL.lon}`));
+    assert.ok(entrance.includes("dirflg=w"));
+    for (const url of [lot, entrance, directionsUrl("to-hotel", "apple"), directionsUrl("from-hotel", "google")]) {
+      const params = [...new URL(url).searchParams.keys()].sort();
+      assert.ok(params.every((key) => ["api", "daddr", "destination", "dirflg", "travelmode"].includes(key)), url);
+      assert.equal(/hotel|resort|season|lot|entrance/i.test(new URL(url).search), false, url);
+    }
+  });
+});
+
+describe("deep links", () => {
+  it("reads the column from a QR code or shortcut", () => {
+    assert.equal(directionFromSearch("?dir=to"), "to-hotel");
+    assert.equal(directionFromSearch("?dir=FROM"), "from-hotel");
+    assert.equal(directionFromSearch("?x=1&dir=lot"), "to-hotel");
+    assert.equal(directionFromSearch("dir=entrance"), "from-hotel");
+    assert.equal(directionFromSearch("?dir=from-hotel"), "from-hotel");
+    assert.equal(directionFromSearch(""), null);
+    assert.equal(directionFromSearch("?dir=sideways"), null);
   });
 });
