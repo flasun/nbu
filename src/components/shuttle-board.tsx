@@ -40,6 +40,7 @@ import {
   listLabel,
   readOrlando,
   resolveDirection,
+  rideDeparture,
   serviceRank,
   stopDistance,
   zoneFor,
@@ -63,6 +64,8 @@ type Prefs = {
 };
 
 type Fix = {
+  /** When the phone took the reading, epoch ms. */
+  at: number;
   zone: Zone;
   hotelM: number;
   lotM: number;
@@ -77,13 +80,19 @@ const DEFAULT_PREFS: Prefs = {
   locate: false,
 };
 
+/** A reading older than this no longer counts for "you're at the stop". */
+const FIX_FRESH_MS = 3 * 60_000;
+/** Re-read location this often while the page is on screen. */
+const RELOCATE_MS = 60_000;
+const ZONES: readonly PlaceState[] = ["at-hotel", "at-lot", "away", "fuzzy", "far"];
+
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
 function loadPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return DEFAULT_PREFS;
+    if (!raw) return { ...DEFAULT_PREFS };
     const parsed = JSON.parse(raw) as Partial<Prefs>;
     const mode: Mode =
       parsed.mode === "to-hotel" || parsed.mode === "from-hotel" || parsed.mode === "auto"
@@ -98,7 +107,7 @@ function loadPrefs(): Prefs {
       locate: Boolean(parsed.locate),
     };
   } catch {
-    return DEFAULT_PREFS;
+    return { ...DEFAULT_PREFS };
   }
 }
 
@@ -218,6 +227,8 @@ export function ShuttleBoard() {
   const [locateNonce, setLocateNonce] = useState(0);
   const [mapApp, setMapApp] = useState<MapApp>("google");
   const [timesOpen, setTimesOpen] = useState(false);
+  /** Column from a stop's QR code or a shortcut. Lasts for this visit and is never saved. */
+  const [linked, setLinked] = useState<Direction | null>(null);
   const nextRow = useRef<HTMLLIElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
@@ -227,16 +238,15 @@ export function ShuttleBoard() {
   const locateGen = useRef(0);
 
   useEffect(() => {
-    const saved = loadPrefs();
-    const linked = directionFromSearch(window.location.search);
-    if (linked) {
-      // A stop's QR code or a home-screen shortcut picks the column, like tapping it.
-      saved.mode = linked;
+    setPrefs(loadPrefs());
+    const fromLink = directionFromSearch(window.location.search);
+    if (fromLink) {
+      // Show that column for this visit only, so a scan never turns off Follow me for good.
+      setLinked(fromLink);
       const url = new URL(window.location.href);
       url.searchParams.delete("dir");
       window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     }
-    setPrefs(saved);
     setHydrated(true);
     const ua = navigator.userAgent;
     if (/iP(hone|ad|od)/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1)) {
@@ -263,7 +273,8 @@ export function ShuttleBoard() {
       setFix(null);
       return;
     }
-    if (prefs.mode !== "auto") return;
+    // Keep reading while a column is locked too: the walk skip and the wrong-column
+    // warning need a current fix. A locked column never changes because of it.
     if (!("geolocation" in navigator)) {
       setPlace("unsupported");
       return;
@@ -278,13 +289,19 @@ export function ShuttleBoard() {
           const lotM = haversineMeters(pos.coords.latitude, pos.coords.longitude, LOT.lat, LOT.lon);
           const accuracyM = pos.coords.accuracy;
           const zone = zoneFor(hotelM, lotM, accuracyM);
-          setFix({ zone, hotelM, lotM, accuracyM });
+          setFix({ at: pos.timestamp, zone, hotelM, lotM, accuracyM });
           setPlace(zone);
         },
         (err) => {
           if (gen !== locateGen.current) return;
-          setFix(null);
-          setPlace(geoFailure(err.code));
+          const failure = geoFailure(err.code);
+          if (failure === "denied") {
+            setFix(null);
+            setPlace(failure);
+            return;
+          }
+          // A slow re-read at the lot keeps the last place instead of blanking the column.
+          setPlace((prev) => (ZONES.includes(prev) ? prev : failure));
         },
         { enableHighAccuracy: false, maximumAge: 60_000, timeout: 12_000 },
       );
@@ -294,11 +311,13 @@ export function ShuttleBoard() {
       if (document.visibilityState === "visible") ask();
     };
     document.addEventListener("visibilitychange", onVis);
+    const again = window.setInterval(onVis, RELOCATE_MS);
     return () => {
       locateGen.current += 1;
+      window.clearInterval(again);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [hydrated, prefs.locate, prefs.mode, locateNonce]);
+  }, [hydrated, prefs.locate, locateNonce]);
 
   useEffect(() => {
     if (!prefs.awake || !("wakeLock" in navigator)) {
@@ -328,10 +347,14 @@ export function ShuttleBoard() {
     };
   }, [prefs.awake]);
 
-  const direction = resolveDirection(prefs.mode, place);
+  const mode: Mode = linked ?? prefs.mode;
+  const direction = resolveDirection(mode, place);
   const atStop =
+    !plan &&
+    live !== null &&
     direction !== null &&
     fix !== null &&
+    live.epochMs - fix.at <= FIX_FRESH_MS &&
     isAtStop(stopDistance(direction, fix.hotelM, fix.lotM), fix.accuracyM);
   const walkMin = atStop ? 0 : prefs.walkMin;
   const planMin = /^(\d{2}):(\d{2})$/.exec(plan);
@@ -376,19 +399,21 @@ export function ShuttleBoard() {
   const summary = summaryText(direction, board);
   const copy = direction ? DIRECTION_COPY[direction] : null;
   const mismatch =
-    prefs.mode !== "auto" &&
+    mode !== "auto" &&
     ((place === "at-hotel" && direction === "to-hotel") ||
       (place === "at-lot" && direction === "from-hotel") ||
       (place === "away" && direction === "from-hotel") ||
       (place === "far" && direction === "from-hotel"));
 
   function choose(next: Direction) {
+    setLinked(null);
     setPrefs((prev) => ({ ...prev, mode: next }));
   }
 
   function followMe() {
-    setPlace("pending");
+    setLinked(null);
     setPrefs((prev) => ({ ...prev, mode: "auto", locate: true }));
+    setLocateNonce((n) => n + 1);
   }
 
   function useMyLocation() {
@@ -594,11 +619,11 @@ export function ShuttleBoard() {
               <div className="min-w-0">
                 <p className="font-medium text-ivory">{placeTitle(place)}</p>
                 <p className="text-sm text-mute">
-                  {placeDetail(place, prefs.mode, fix)}
+                  {placeDetail(place, mode, fix)}
                 </p>
               </div>
             </div>
-            {prefs.mode !== "auto" ? (
+            {mode !== "auto" ? (
               <button
                 type="button"
                 onClick={followMe}
@@ -706,13 +731,14 @@ export function ShuttleBoard() {
             <li>At the lot → To hotel</li>
             <li>Anywhere else → To hotel, until you lock a column</li>
           </ul>
+          <p>If your location is too rough to tell, it asks you to pick.</p>
           <p>
-            With location off, tap a column and it sticks on this phone. A stop's QR code picks the
-            column for you.
+            With location off, tap a column and it sticks on this phone. A stop's QR code shows that
+            column for that visit.
           </p>
           <p>
-            Your location stays on this phone. It is never sent anywhere. The map link only carries the
-            stop's position.
+            This board never sends your location anywhere. The map link only carries the stop's
+            position.
           </p>
           <p>
             Keep screen on holds the display while you wait at the stop. Chime plays a short tone
@@ -853,6 +879,7 @@ function Hero({
   mapHref: string;
 }) {
   const late = walkLine(board, atStop);
+  const rideFrom = rideDeparture(board);
   const hot = !board.next.boarding && board.next.waitSec < 60 && !board.inGap;
   const tone = columnTone(board.direction);
   const eyebrow = board.inGap ? "No bus" : board.next.boarding ? "Leaving now" : `Next bus ${copy.title.toLowerCase()}`;
@@ -865,8 +892,10 @@ function Hero({
         <span className={`live-dot inline-block size-2 rounded-full ${tone.dot}`} aria-hidden="true" />
         {eyebrow}
       </p>
-      <p className="mt-3 font-display text-5xl leading-none font-semibold tracking-wide whitespace-nowrap text-ivory">
-        {board.inGap ? "1:30–3:00 AM" : formatClock(board.next.minutes)}
+      <p className="mt-3 font-display text-5xl leading-none font-semibold tracking-wide text-ivory">
+        <span className="whitespace-nowrap">
+          {board.inGap ? "1:30–3:00 AM" : formatClock(board.next.minutes)}
+        </span>
         {board.next.tomorrow && !board.inGap ? (
           <span className="ml-2 align-middle font-sans text-base font-medium tracking-normal text-mute normal-case">
             tomorrow
@@ -883,7 +912,7 @@ function Hero({
           href={mapHref}
           target="_blank"
           rel="noreferrer"
-          aria-label={`Directions to the ${copy.stop.toLowerCase()} in your maps app`}
+          aria-label={copy.directions}
           className={`inline-flex min-h-11 items-center gap-1 font-medium text-ivory underline underline-offset-4 ${focusRing}`}
         >
           <Navigation className="size-3.5" aria-hidden="true" />
@@ -920,10 +949,11 @@ function Hero({
       {board.inGap || board.lotCallout ? null : (
         <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
       )}
-      {board.inGap || board.lotCallout ? null : (
+      {board.inGap || board.lotCallout || rideFrom === null ? null : (
         <p className="mt-1 text-sm text-mute" data-testid="arrival">
-          {copy.arrives} around {formatClock(board.next.minutes + RIDE_MIN)} · about {RIDE_MIN} min, can
-          run longer
+          {copy.arrives} around {formatClock(rideFrom + RIDE_MIN)}
+          {rideFrom === board.next.minutes ? "" : ` on the ${formatClock(rideFrom)} bus`} · about {RIDE_MIN}{" "}
+          min, can run longer
         </p>
       )}
       {board.following.length > 0 && !board.inGap ? (

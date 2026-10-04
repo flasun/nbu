@@ -385,6 +385,12 @@ export function boardAt(
   };
 }
 
+/** Departure the arrival estimate follows: the next bus, or the one you can still make. */
+export function rideDeparture(board: BoardSnapshot): number | null {
+  if (board.next.boarding || board.leaveInSec >= 0) return board.next.minutes;
+  return board.catchMinutes;
+}
+
 export function daypart(minutes: number): string {
   if (minutes < 5 * 60) return "Early morning";
   if (minutes < 12 * 60) return "Morning";

@@ -14,6 +14,7 @@ import {
   isAtStop,
   isDeparturePast,
   resolveDirection,
+  rideDeparture,
   serviceRank,
   stopDistance,
   zoneFor,
@@ -264,5 +265,29 @@ describe("deep links", () => {
     assert.equal(directionFromSearch("?dir=from-hotel"), "from-hotel");
     assert.equal(directionFromSearch(""), null);
     assert.equal(directionFromSearch("?dir=sideways"), null);
+  });
+});
+
+describe("arrival estimate", () => {
+  it("follows the next bus when you can make it", () => {
+    const board = boardAt("to-hotel", min("7:22AM") * 60, 3);
+    assert.equal(rideDeparture(board), min("7:30AM"));
+  });
+
+  it("follows the bus you can still catch after 'too late'", () => {
+    const board = boardAt("to-hotel", min("7:28AM") * 60, 3);
+    assert.ok(board.leaveInSec < 0);
+    assert.equal(rideDeparture(board), min("7:45AM"));
+  });
+
+  it("follows the bus at the stop while it boards", () => {
+    const board = boardAt("to-hotel", min("7:30AM") * 60 + 20, 3);
+    assert.equal(board.next.boarding, true);
+    assert.equal(rideDeparture(board), min("7:30AM"));
+  });
+
+  it("follows the next bus when the walk is zero", () => {
+    const board = boardAt("from-hotel", min("5:14PM") * 60, 0);
+    assert.equal(rideDeparture(board), min("5:15PM"));
   });
 });

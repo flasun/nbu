@@ -4,6 +4,9 @@
 // - The page tries the network for NAV_TIMEOUT_MS, then falls back to the saved copy.
 // - Hashed /assets/ files never change, so they come from the cache first.
 // - A saved page is only replaced once every file it points at is saved too.
+// - Only the board itself is ever saved as the page. Other pages served at "/"
+//   (for example the platform's ?install=1 tutorial) are left alone.
+// - If the phone's cache storage fails, everything still loads from the network.
 
 const CACHE = "nbu-v3";
 const SHELL = "/";
@@ -44,21 +47,31 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (req.mode === "navigate") {
-    if (url.pathname === SHELL) event.respondWith(page(event));
+    if (url.pathname === SHELL) event.respondWith(orNetwork(page(event, isBoard(url)), req));
     return;
   }
   if (url.pathname.startsWith("/assets/")) {
-    event.respondWith(cacheFirst(event));
+    event.respondWith(orNetwork(cacheFirst(event), req));
     return;
   }
-  if (STATIC_RE.test(url.pathname)) event.respondWith(staleWhileRevalidate(event));
+  if (STATIC_RE.test(url.pathname)) event.respondWith(orNetwork(staleWhileRevalidate(event), req));
 });
 
-async function page(event) {
+/** The board's own address: "/" with nothing but an optional ?dir=. */
+function isBoard(url) {
+  return [...url.searchParams.keys()].every((key) => key === "dir");
+}
+
+/** A broken cache must never stop the app loading while the network works. */
+function orNetwork(answer, req) {
+  return answer.catch(() => fetch(req));
+}
+
+async function page(event, board) {
   const cache = await caches.open(CACHE);
   let saving = Promise.resolve();
   const network = fetch(event.request).then((res) => {
-    if (res.ok) saving = saveShell(cache, res.clone()).catch(() => {});
+    if (res.ok && board) saving = saveShell(cache, res.clone()).catch(() => {});
     return res;
   });
   event.waitUntil(network.then(() => saving).catch(() => {}));
@@ -69,6 +82,8 @@ async function page(event) {
     (res) => (res.status >= 500 ? saved : res),
     () => saved,
   );
+  // Another page at "/" gets the network's answer, however slow; the board is only its offline fallback.
+  if (!board) return fromNetwork;
   const timeout = new Promise((resolve) => setTimeout(() => resolve(saved), NAV_TIMEOUT_MS));
   return Promise.race([fromNetwork, timeout]);
 }
@@ -109,8 +124,11 @@ async function staleWhileRevalidate(event) {
 
 /** Save the page last, after everything it loads, so a saved page is never missing a file. */
 async function saveShell(cache, res) {
+  if (!(res.headers.get("content-type") ?? "").includes("text/html")) return;
   const html = await res.clone().text();
   const assets = new Set(html.match(ASSET_RE) ?? []);
+  // Not the board (it always loads its scripts from /assets/). Never save it or prune for it.
+  if (![...assets].some((path) => path.endsWith(".js"))) return;
   for (const css of [...assets].filter((path) => path.endsWith(".css"))) {
     const sheet = await saveAsset(cache, css);
     if (!sheet) return;
