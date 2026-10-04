@@ -19,6 +19,11 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
-      - run: npm run lint:app
-      - run: npm run test:app
+      - run: npm run lint
+      - run: npm test
       - run: npm run build
+      - run: npx wrangler deploy --dry-run
+        env:
+          WRANGLER_SEND_METRICS: "false"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

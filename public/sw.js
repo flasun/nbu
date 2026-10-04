@@ -4,8 +4,8 @@
 // - The page tries the network for NAV_TIMEOUT_MS, then falls back to the saved copy.
 // - Hashed /assets/ files never change, so they come from the cache first.
 // - A saved page is only replaced once every file it points at is saved too.
-// - Only the board itself is ever saved as the page. Other pages served at "/"
-//   (for example the platform's ?install=1 tutorial) are left alone.
+// - Only the board itself is ever saved as the page. "/" with any other query
+//   string gets the network's answer and is never saved.
 // - If the phone's cache storage fails, everything still loads from the network.
 
 const CACHE = "nbu-v3";

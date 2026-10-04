@@ -111,8 +111,13 @@ function loadPrefs(): Prefs {
   }
 }
 
+function isAppleDevice(): boolean {
+  const ua = navigator.userAgent;
+  return /iP(hone|ad|od)/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
+}
+
 function useOrlandoNow(): OrlandoNow | null {
-  const [now, setNow] = useState<OrlandoNow | null>(null);
+  const [now, setNow] = useState<OrlandoNow | null>(() => readOrlando(new Date()));
   useEffect(() => {
     const tick = () => setNow(readOrlando(new Date()));
     tick();
@@ -217,18 +222,19 @@ function placeTitle(place: PlaceState): string {
 
 export function ShuttleBoard() {
   const live = useOrlandoNow();
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
-  const [hydrated, setHydrated] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [place, setPlace] = useState<PlaceState>("idle");
   const [fix, setFix] = useState<Fix | null>(null);
   const [plan, setPlan] = useState<string>("");
   const [wakeNote, setWakeNote] = useState<string | null>(null);
   const [chimeArmed, setChimeArmed] = useState(false);
   const [locateNonce, setLocateNonce] = useState(0);
-  const [mapApp, setMapApp] = useState<MapApp>("google");
-  const [timesOpen, setTimesOpen] = useState(false);
+  const [mapApp] = useState<MapApp>(() => (isAppleDevice() ? "apple" : "google"));
+  const [timesOpen, setTimesOpen] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
   /** Column from a stop's QR code or a shortcut. Lasts for this visit and is never saved. */
-  const [linked, setLinked] = useState<Direction | null>(null);
+  const [linked, setLinked] = useState<Direction | null>(() =>
+    directionFromSearch(window.location.search),
+  );
   const nextRow = useRef<HTMLLIElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
@@ -238,27 +244,21 @@ export function ShuttleBoard() {
   const locateGen = useRef(0);
 
   useEffect(() => {
-    setPrefs(loadPrefs());
-    const fromLink = directionFromSearch(window.location.search);
-    if (fromLink) {
-      // Show that column for this visit only, so a scan never turns off Follow me for good.
-      setLinked(fromLink);
-      const url = new URL(window.location.href);
-      url.searchParams.delete("dir");
-      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-    }
-    setHydrated(true);
-    const ua = navigator.userAgent;
-    if (/iP(hone|ad|od)/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1)) {
-      setMapApp("apple");
-    }
-    if (window.matchMedia("(min-width: 1024px)").matches) setTimesOpen(true);
+    // ?dir= shows that column for this visit only, so a scan never turns off Follow me for good.
+    // Drop it from the address so it doesn't stick to a home-screen icon.
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("dir")) return;
+    url.searchParams.delete("dir");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  }, [prefs, hydrated]);
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // Private mode or full storage: settings just won't stick.
+    }
+  }, [prefs]);
 
   useEffect(() => {
     if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
@@ -266,7 +266,6 @@ export function ShuttleBoard() {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
     if (!prefs.locate) {
       locateGen.current += 1;
       setPlace("idle");
@@ -317,7 +316,7 @@ export function ShuttleBoard() {
       window.clearInterval(again);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [hydrated, prefs.locate, locateNonce]);
+  }, [prefs.locate, locateNonce]);
 
   useEffect(() => {
     if (!prefs.awake || !("wakeLock" in navigator)) {
