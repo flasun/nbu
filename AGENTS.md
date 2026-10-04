@@ -19,6 +19,9 @@ touch the page, `public/sw.js`, `index.html` or `vite.config.ts`. CI runs all of
 - **Offline first.** In `public/sw.js`, never answer a script or font request with HTML, only save the
   board itself as the offline page, and keep the network timeout short. Riders open this at the lot
   with one bar of signal.
-- **Plain, short copy.** Spanish, Haitian Creole and Portuguese translations are planned, so write
-  whole phrases, not sentences glued together from pieces.
+- **Every word in four languages.** All text is in `src/lib/i18n/` (English source `en.ts`, plus
+  `es.ts`, `ht.ts` Haitian Creole and `pt.ts` Brazilian Portuguese). Never hard-code text in a
+  component. A new or changed line goes into all four files; write whole phrases with placeholders,
+  never sentences glued together from pieces. Keep times exactly as passed in ("7:30 AM").
+  `npm test` checks that nothing is missing, left in English, too long, or missing its time.
 - No accounts, database, trackers or third-party scripts without asking the owner first.

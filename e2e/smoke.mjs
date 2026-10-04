@@ -144,3 +144,27 @@ test("opens offline after a single visit", async () => {
   );
   await context.close();
 });
+
+test("switches language, keeps the printed times, and remembers the choice", async () => {
+  // 7:22 AM in Orlando.
+  const { context, page, errors } = await open("?dir=to", { iso: "2026-10-03T11:22:00Z" });
+  await page.getByTestId("lang-es").click();
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "es");
+  assert.equal(await page.getByTestId("lang-es").getAttribute("aria-pressed"), "true");
+  await assert.doesNotReject(page.getByText("7:30 AM", { exact: true }).first().waitFor());
+  assert.notEqual(await page.getByTestId("direction-to").innerText(), "To hotel\nLeaves the lot");
+  await page.reload({ waitUntil: "load" });
+  await page.locator('[data-testid="clock"]').waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "es");
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("opens a shared ?lang= link in that language", async () => {
+  const { context, page, errors } = await open("?lang=ht&dir=from", { iso: "2026-10-03T21:12:00Z" });
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "ht");
+  assert.equal(await page.getByTestId("direction-from").getAttribute("aria-checked"), "true");
+  assert.equal(new URL(page.url()).search, "", "?lang= and ?dir= are dropped from the address");
+  assert.deepEqual(errors, []);
+  await context.close();
+});
