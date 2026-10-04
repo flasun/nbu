@@ -22,7 +22,7 @@ export const pt: Messages = {
       standAt: "Espere no estacionamento",
       leaves: "Sai do estacionamento",
       column: "Esta é a coluna do estacionamento. A coluna da entrada fica escondida.",
-      nextBus: "Próximo ônibus ao hotel",
+      nextBus: "Próximo indo para o hotel",
       backAt: (time: string) => `Volta ${time.startsWith("1:") ? "à" : "às"} ${time} · Estacionamento`,
       arrives: (time: string) => `Chega ao hotel por volta ${time.startsWith("1:") ? "da" : "das"} ${time}`,
       arrivesOn: (time: string, bus: string) =>
@@ -42,7 +42,7 @@ export const pt: Messages = {
       standAt: "Espere na entrada de funcionários",
       leaves: "Sai da entrada de funcionários",
       column: "Esta é a coluna da entrada de funcionários. A coluna do estacionamento fica escondida.",
-      nextBus: "Próximo ônibus do hotel",
+      nextBus: "Próximo saindo do hotel",
       backAt: (time: string) => `Volta ${time.startsWith("1:") ? "à" : "às"} ${time} · Entrada de funcionários`,
       arrives: (time: string) =>
         `Chega ao estacionamento por volta ${time.startsWith("1:") ? "da" : "das"} ${time}`,
@@ -159,7 +159,7 @@ export const pt: Messages = {
     fromHotel: (distance: string) => `a ${distance} do ponto do hotel`,
   },
   placeButtons: {
-    followMe: "Me siga",
+    followMe: "Seguir meu local",
     tryAgain: "Tentar de novo",
     useLocation: "Usar localização",
     lock: "Fixar coluna",
@@ -180,7 +180,7 @@ export const pt: Messages = {
     label: "Ver outro horário",
     inputLabel: "Hora de Orlando para simular",
     checking: (time: string) => `Vendo como fica ${time.startsWith("1:") ? "à" : "às"} ${time}, em vez de agora.`,
-    back: "Voltar para agora",
+    back: "Voltar ao horário atual",
   },
 
   list: {

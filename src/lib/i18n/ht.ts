@@ -2,7 +2,7 @@ import type { Messages } from "./en.ts";
 
 /** Haitian Creole (Kreyòl ayisyen), standard IPN spelling, informal "ou"; everyday Florida Kreyòl ("bis", "pakin", "dispatch"). */
 export const ht: Messages = {
-  languageName: "Kreyòl ayisyen",
+  languageName: "Kreyòl",
   languagePicker: "Lang",
 
   header: {
@@ -23,12 +23,12 @@ export const ht: Messages = {
       leaves: "Pati nan pakin nan",
       column: "Sa a se kolòn pakin nan. Kolòn antre a kache.",
       nextBus: "Pwochen bis ki ale otèl",
-      backAt: (time: string) => `Retounen a ${time} · Pakin nan`,
-      arrives: (time: string) => `Rive otèl la vè ${time}`,
-      arrivesOn: (time: string, bus: string) => `Rive otèl la vè ${time} si w pran bis ${bus}`,
+      backAt: (time: string) => `Sèvis la rekòmanse a ${time} · Pakin nan`,
+      arrives: (time: string) => `W ap rive otèl la vè ${time}`,
+      arrivesOn: (time: string, bus: string) => `W ap rive otèl la vè ${time} si w pran bis ki pati a ${bus}`,
       mapLabel: "Wout pou ale nan pakin nan, sou aplikasyon kat ou",
       summaryNext: (time: string, minutes: number) =>
-        `Pwochen bis la pati a ${time} nan pakin nan. Rete anviwon ${minutes} minit.`,
+        `Pwochen bis la pati nan pakin nan a ${time}, nan anviwon ${minutes} minit.`,
       summaryBoarding: (time: string) => `Bis ${time} ap pati nan pakin nan kounye a.`,
       summaryGap: (time: string) => `Pa gen bis. Sèvis la rekòmanse a ${time} nan pakin nan.`,
     },
@@ -40,12 +40,12 @@ export const ht: Messages = {
       leaves: "Pati nan antre anplwaye yo",
       column: "Sa a se kolòn antre anplwaye yo. Kolòn pakin nan kache.",
       nextBus: "Pwochen bis ki soti otèl",
-      backAt: (time: string) => `Retounen a ${time} · Antre anplwaye yo`,
-      arrives: (time: string) => `Rive nan pakin nan vè ${time}`,
-      arrivesOn: (time: string, bus: string) => `Rive nan pakin nan vè ${time} si w pran bis ${bus}`,
+      backAt: (time: string) => `Sèvis la rekòmanse a ${time} · Antre anplwaye yo`,
+      arrives: (time: string) => `W ap rive nan pakin nan vè ${time}`,
+      arrivesOn: (time: string, bus: string) => `W ap rive nan pakin nan vè ${time} si w pran bis ki pati a ${bus}`,
       mapLabel: "Wout pou ale nan antre anplwaye yo, sou aplikasyon kat ou",
       summaryNext: (time: string, minutes: number) =>
-        `Pwochen bis la pati a ${time} nan antre anplwaye yo. Rete anviwon ${minutes} minit.`,
+        `Pwochen bis la pati nan antre anplwaye yo a ${time}, nan anviwon ${minutes} minit.`,
       summaryBoarding: (time: string) => `Bis ${time} ap pati nan antre anplwaye yo kounye a.`,
       summaryGap: (time: string) => `Pa gen bis. Sèvis la rekòmanse a ${time} nan antre anplwaye yo.`,
     },
@@ -65,7 +65,7 @@ export const ht: Messages = {
 
   pickSide: {
     title: "Chwazi yon bò",
-    body: "Ale otèl si w ap vin nan pakin nan pou pran bis la. Soti otèl si w nan antre anplwaye yo sou Dream Tree Blvd.",
+    body: "Chwazi “Ale otèl” si w ap vin nan pakin nan pou pran bis la. Chwazi “Soti otèl” si w nan antre anplwaye yo sou Dream Tree Blvd.",
   },
 
   hero: {
@@ -99,7 +99,7 @@ export const ht: Messages = {
     leaveNow: "Pati kounye a, sinon w ap rate l.",
     headOut: (time: string, minutes: number) => `Pati pa pita pase ${time} · ${minutes} min pou rive nan arè a`,
     label: "Minit pou rive nan arè a",
-    skipped: "Pa konte pandan ou nan arè a",
+    skipped: "Minit yo pa konte pandan ou nan arè a",
     fewer: "Mwens minit pou rive nan arè a",
     more: "Plis minit pou rive nan arè a",
   },
@@ -123,15 +123,15 @@ export const ht: Messages = {
     far: "Ap vin nan pakin nan",
     denied: "Lokalizasyon fèmen",
     timeout: "Lokalizasyon pran twòp tan",
-    idle: "Pa sèvi ak lokalizasyon",
+    idle: "Nou p ap sèvi ak lokalizasyon",
     unavailable: "Pa jwenn pozisyon w",
     unsupported: "Lokalizasyon pa disponib",
   },
   placeDetail: {
     locked: (where: string) => `Kolòn bloke · ${where}`,
-    lockedNoPin: "Kolòn bloke · pa sèvi ak pozisyon w",
+    lockedNoPin: "Kolòn bloke · nou p ap sèvi ak pozisyon w",
     fromLink: (where: string) => `Dapre kòd QR arè a · ${where}`,
-    fromLinkNoPin: "Dapre kòd QR arè a · pou vizit sa a sèlman",
+    fromLinkNoPin: "Dapre kòd QR arè a · pou fwa sa a sèlman",
     ago: (where: string, minutes: number) => `${where} · sa gen ${minutes} min`,
     pending: "N ap chèche arè otèl la ak arè pakin nan",
     entranceColumn: (where: string) => `${where} · kolòn antre a`,
@@ -142,7 +142,7 @@ export const ht: Messages = {
     denied: "Pèmèt lokalizasyon, oswa chwazi ak bouton yo. L ap rete konsa.",
     timeout: "Sa pran twòp tan. Eseye ankò, oswa chwazi ak bouton yo.",
     unavailable: "Telefòn sa a pa t ka jwenn pozisyon w. Chwazi ak bouton yo.",
-    idle: "Ouvri lokalizasyon si w vle kolòn nan chwazi pou kont li.",
+    idle: "Louvri lokalizasyon si w vle nou chwazi kolòn nan pou ou.",
     other: "Chwazi ak bouton yo. L ap rete konsa sou telefòn sa a.",
     fromLot: (distance: string) => `${distance} lwen arè pakin nan`,
     fromHotel: (distance: string) => `${distance} lwen arè otèl la`,
@@ -186,12 +186,12 @@ export const ht: Messages = {
     },
     now: "Kounye a",
     next: "Pwochen",
-    left: "Pati",
+    left: "Li pati",
   },
 
   how: {
     title: "Kijan yo chwazi kolòn nan",
-    withLocation: "Lè lokalizasyon ouvri, kolòn nan swiv kote ou ye:",
+    withLocation: "Lè lokalizasyon louvri, kolòn nan swiv kote ou ye:",
     atEntrance: "Nan antre anplwaye yo → Soti otèl",
     atLot: "Nan pakin nan → Ale otèl",
     elsewhere: "Nenpòt lòt kote → Ale otèl, jiskaske ou bloke yon kolòn",
@@ -226,6 +226,6 @@ export const ht: Messages = {
   error: {
     title: "Gen yon bagay ki pa mache",
     unknown: "Erè nou pa konnen",
-    reload: "Rechaje",
+    reload: "Rechaje paj la",
   },
 };

@@ -807,7 +807,7 @@ function LanguagePicker({
           aria-pressed={code === lang}
           data-testid={`lang-${code}`}
           onClick={() => onChange(code)}
-          className={`inline-flex min-h-10 items-center rounded-full border px-3 text-xs font-medium ${focusRing} ${
+          className={`inline-flex min-h-10 items-center rounded-full border px-2.5 text-xs font-medium ${focusRing} ${
             code === lang ? "border-signal bg-signal text-signal-ink" : "border-line text-ivory"
           }`}
         >
