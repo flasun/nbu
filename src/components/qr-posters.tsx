@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { flushSync } from "react-dom";
+import { useMemo, useState } from "react";
 import { BusFront, Clock, Hotel, Phone, Printer, TriangleAlert } from "lucide-react";
 import QRCode from "qrcode";
 import { HTML_LANG, LANGS, MESSAGES, type Lang } from "@/lib/i18n";
@@ -27,21 +26,20 @@ const ICONS = { "to-hotel": Hotel, "from-hotel": BusFront, anywhere: Clock } as 
 export function QrPosters({ lang }: { lang: Lang }) {
   const t = MESSAGES[lang].poster;
   const { origin, host, hostname } = window.location;
-  /** Print just this poster, or all of them. */
-  const [only, setOnly] = useState<PosterKind | null>(null);
-  const printed = only ? [only] : POSTER_KINDS;
+  /**
+   * Posters to print. A plain on-page choice rather than print events, so the browser's own
+   * Print menu prints the same thing, and phones that report "done printing" early can't undo it.
+   */
+  const [picked, setPicked] = useState<ReadonlySet<PosterKind>>(() => new Set(POSTER_KINDS));
+  const printed = POSTER_KINDS.filter((kind) => picked.has(kind));
 
-  useEffect(() => {
-    const reset = () => setOnly(null);
-    window.addEventListener("afterprint", reset);
-    return () => window.removeEventListener("afterprint", reset);
-  }, []);
-
-  const print = (kind: PosterKind | null) => {
-    // The page has to show the right posters before the print dialog lays it out.
-    flushSync(() => setOnly(kind));
-    window.print();
-  };
+  const toggle = (kind: PosterKind, on: boolean) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(kind);
+      else next.delete(kind);
+      return next;
+    });
 
   return (
     <main className="pb-12 print:pb-0">
@@ -61,12 +59,13 @@ export function QrPosters({ lang }: { lang: Lang }) {
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button
             type="button"
-            onClick={() => print(null)}
-            data-testid="print-all"
-            className={`inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink ${focusRing}`}
+            onClick={() => window.print()}
+            disabled={printed.length === 0}
+            data-testid="print"
+            className={`inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink disabled:opacity-40 ${focusRing}`}
           >
             <Printer className="size-4" aria-hidden="true" />
-            {t.printAll}
+            {t.print}
           </button>
           <span className="text-sm text-mute">{t.paper}</span>
         </div>
@@ -83,18 +82,21 @@ export function QrPosters({ lang }: { lang: Lang }) {
               data-testid={`poster-${kind}`}
               className={`poster-figure${skipped ? " poster-skip" : ""}${breaks ? " poster-break" : ""}`}
             >
-              <Poster kind={kind} url={url} label={t.codeLabel(url)} />
+              <div className={skipped ? "opacity-40 transition-opacity" : "transition-opacity"}>
+                <Poster kind={kind} url={url} label={t.codeLabel(url)} />
+              </div>
               <figcaption className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-mute print:hidden">
                 <span>{t.putUp[kind]}</span>
-                <button
-                  type="button"
-                  onClick={() => print(kind)}
-                  data-testid={`print-${kind}`}
-                  className={`inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-3 text-sm text-ivory ${focusRing}`}
-                >
-                  <Printer className="size-4" aria-hidden="true" />
+                <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-ivory has-focus-visible:ring-2 has-focus-visible:ring-signal">
+                  <input
+                    type="checkbox"
+                    checked={!skipped}
+                    onChange={(event) => toggle(kind, event.target.checked)}
+                    data-testid={`pick-${kind}`}
+                    className="size-4 accent-signal focus:outline-none"
+                  />
                   {t.printThis}
-                </button>
+                </label>
               </figcaption>
             </figure>
           );

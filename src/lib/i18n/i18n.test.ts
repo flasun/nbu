@@ -121,7 +121,7 @@ describe("every language", () => {
           "tools.chime": 18,
           "tools.chimeOn": 18,
           "tools.rearm": 18,
-          "poster.printAll": 18,
+          "poster.print": 18,
           "poster.printThis": 18,
           "poster.anywhereTitle": 11,
           "poster.anywhereDetail": 32,

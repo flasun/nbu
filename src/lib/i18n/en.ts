@@ -288,9 +288,9 @@ export const en = {
     title: "QR posters",
     intro:
       "Print them and put each one up where it says. A stop's code opens the board on that stop's column, for that visit only.",
-    /** Button that prints every poster. */
-    printAll: "Print all",
-    /** Button under one poster. */
+    /** Button that prints the posters that are ticked. Max 18. */
+    print: "Print",
+    /** Checkbox under each poster, ticked to begin with. Max 18. */
     printThis: "Print this one",
     /** Next to the print button. */
     paper: "Letter or A4, portrait. Each poster prints on its own page.",

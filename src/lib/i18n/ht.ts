@@ -227,7 +227,7 @@ export const ht: Messages = {
     title: "Afich QR",
     intro:
       "Enprime yo, epi mete chak afich kote yo di l ale a. Kòd yon arè louvri tablo a sou kolòn arè sa a, pou vizit sa a sèlman.",
-    printAll: "Enprime tout",
+    print: "Enprime",
     printThis: "Enprime sa a",
     paper: "Papye Letter oswa A4, an longè. Chak afich sou pwòp paj li.",
     temporary: (host: string) =>

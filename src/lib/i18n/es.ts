@@ -238,7 +238,7 @@ export const es: Messages = {
     title: "Carteles QR",
     intro:
       "Imprímelos y pon cada uno donde dice. El código de una parada abre la app en la columna de esa parada, solo durante esa visita.",
-    printAll: "Imprimir todos",
+    print: "Imprimir",
     printThis: "Imprimir este",
     paper: "Carta o A4, vertical. Cada cartel sale en su propia hoja.",
     temporary: (host: string) =>

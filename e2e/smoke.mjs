@@ -242,13 +242,17 @@ test("prints a poster for each stop, with a code that opens its column", async (
   await context.close();
 });
 
-test("prints just one poster when asked", async () => {
+test("prints only the posters that are ticked", async () => {
   const { context, page, errors } = await openPosters();
   await page.evaluate(() => {
     window.print = () => (window.printed = (window.printed ?? 0) + 1);
   });
-  await page.getByTestId("print-from-hotel").click();
+  await page.getByTestId("pick-to-hotel").uncheck();
+  await page.getByTestId("pick-anywhere").uncheck();
+  await page.getByTestId("print").click();
   assert.equal(await page.evaluate(() => window.printed), 1);
+  // The browser's own Print menu prints the same: the choice is on the page, not in print events.
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
   await page.emulateMedia({ media: "print" });
   const visible = await page.locator("figure").evaluateAll((nodes) =>
     nodes.filter((node) => node.offsetParent !== null).map((node) => node.dataset.testid),
@@ -257,9 +261,11 @@ test("prints just one poster when asked", async () => {
   await page.emulateMedia({ media: null });
   assert.equal(pdfPages(await page.pdf({ format: "Letter" })), 1);
 
-  // Closing the print dialog brings the others back.
-  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
-  assert.equal(pdfPages(await page.pdf({ format: "Letter" })), 3);
+  await page.getByTestId("pick-anywhere").check();
+  assert.equal(pdfPages(await page.pdf({ format: "A4" })), 2);
+  await page.getByTestId("pick-from-hotel").uncheck();
+  await page.getByTestId("pick-anywhere").uncheck();
+  assert.equal(await page.getByTestId("print").isDisabled(), true, "nothing ticked, nothing to print");
   assert.deepEqual(errors, []);
   await context.close();
 });

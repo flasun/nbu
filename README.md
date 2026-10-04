@@ -63,9 +63,8 @@ The column applies to that visit only and never changes a rider's saved setting.
 
 ### Printing the posters
 
-Open **`/poster`** on the site (for example `https://your-address/poster`) and press **Print all**,
-or **Print this one** under a single poster. There are three, one per page, on Letter or A4 paper
-in portrait:
+Open **`/poster`** on the site (for example `https://your-address/poster`), untick any you don't
+need, and press **Print**. There are three, one per page, on Letter or A4 paper in portrait:
 
 | Poster          | Opens        | Put it up                              |
 | --------------- | ------------ | -------------------------------------- |

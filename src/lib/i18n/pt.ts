@@ -240,7 +240,7 @@ export const pt: Messages = {
     title: "Cartazes QR",
     intro:
       "Imprima e coloque cada um no lugar indicado. O código de um ponto abre o app na coluna desse ponto, só nessa visita.",
-    printAll: "Imprimir todos",
+    print: "Imprimir",
     printThis: "Imprimir este",
     paper: "Carta ou A4, retrato. Cada cartaz sai em uma página.",
     temporary: (host: string) =>
