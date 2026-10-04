@@ -230,7 +230,6 @@ export const pt: Messages = {
     title: "Adicione ao seu celular",
     intro:
       "Abre em tela cheia, como um app. A contagem regressiva fica a um toque, e o app funciona mesmo com sinal fraco no estacionamento.",
-    existing: "Se o ícone já está na sua tela inicial, ele não vai mudar. Apague e adicione de novo.",
     apple:
       "Abra esta página no Safari. Toque em Compartilhar e depois em Adicionar à Tela de Início. No iPhone, o Chrome não consegue colocar o ícone.",
     android: "No Chrome: menu e depois Instalar app.",

@@ -229,7 +229,6 @@ export const es: Messages = {
     title: "Agrégala a tu teléfono",
     intro:
       "Se abre en pantalla completa, como una app. La cuenta regresiva queda a un toque, y la app sigue funcionando aunque haya poca señal en el estacionamiento.",
-    existing: "Si ya tienes el ícono en tu pantalla de inicio, no va a cambiar. Bórralo y vuelve a agregar la app.",
     apple: "Abre esta página en Safari. Toca Compartir y luego Agregar a inicio. En iPhone, Chrome no puede poner el ícono.",
     android: "En Chrome: menú y luego Instalar app.",
   },
