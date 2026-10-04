@@ -1,14 +1,15 @@
 node_modules/
-.project_id
-.github_repo
+dist/
+.wrangler/
 .env
 .env.*
+.dev.vars*
+# Left over from the old Grok hosting; never commit them.
 .vercel/
+.grok/
 # Internal employer sheet. The board does not read this file.
 attachments/
 
 # Local QA shots. They can show the dispatch number and the full board.
 screenshots/
-.grok/preview.log
-.grok/preview.pid
-.grok/og-pending
+test-results/

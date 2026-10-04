@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker's name in the Cloudflare dashboard.
+  "name": "next-bus-up",
+  "compatibility_date": "2026-10-01",
+  // Static files only: no Worker script, so there's nothing to run or pay for per request.
+  // "/" serves index.html. Anything missing gets a plain 404, never the page: a missing
+  // script answered with HTML would break the offline copy.
+  "assets": {
+    "directory": "./dist",
+  },
+  // Required for pull-request preview builds (`wrangler preview`); empty is fine.
+  "previews": {},
+}

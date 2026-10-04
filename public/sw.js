@@ -4,8 +4,8 @@
 // - The page tries the network for NAV_TIMEOUT_MS, then falls back to the saved copy.
 // - Hashed /assets/ files never change, so they come from the cache first.
 // - A saved page is only replaced once every file it points at is saved too.
-// - Only the board itself is ever saved as the page. Other pages served at "/"
-//   (for example the platform's ?install=1 tutorial) are left alone.
+// - Only the board itself is ever saved as the page: HTML that loads /assets/ scripts.
+// - An /assets/ request answered with HTML (a missing file) is never cached.
 // - If the phone's cache storage fails, everything still loads from the network.
 
 const CACHE = "nbu-v3";
@@ -47,7 +47,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (req.mode === "navigate") {
-    if (url.pathname === SHELL) event.respondWith(orNetwork(page(event, isBoard(url)), req));
+    if (url.pathname === SHELL) event.respondWith(orNetwork(page(event), req));
     return;
   }
   if (url.pathname.startsWith("/assets/")) {
@@ -57,21 +57,16 @@ self.addEventListener("fetch", (event) => {
   if (STATIC_RE.test(url.pathname)) event.respondWith(orNetwork(staleWhileRevalidate(event), req));
 });
 
-/** Every "/" address is the board (with ?dir=, ?utm_source=, ...) except the platform's install page. */
-function isBoard(url) {
-  return !url.searchParams.has("install");
-}
-
 /** A broken cache must never stop the app loading while the network works. */
 function orNetwork(answer, req) {
   return answer.catch(() => fetch(req));
 }
 
-async function page(event, board) {
+async function page(event) {
   const cache = await caches.open(CACHE);
   let saving = Promise.resolve();
   const network = fetch(event.request).then((res) => {
-    if (res.ok && board) saving = saveShell(cache, res.clone()).catch(() => {});
+    if (res.ok) saving = saveShell(cache, res.clone()).catch(() => {});
     return res;
   });
   event.waitUntil(network.then(() => saving).catch(() => {}));
@@ -83,8 +78,6 @@ async function page(event, board) {
     (res) => (res.status >= 500 ? saved : res),
     () => saved,
   );
-  // Another page at "/" gets the network's answer, however slow; the board is only its offline fallback.
-  if (!board) return fromNetwork;
   const timeout = new Promise((resolve) => setTimeout(() => resolve(saved), NAV_TIMEOUT_MS));
   return Promise.race([fromNetwork, timeout]);
 }
@@ -95,7 +88,7 @@ async function cacheFirst(event) {
   if (hit) return hit;
   try {
     const res = await fetch(event.request);
-    if (res.ok) event.waitUntil(cache.put(event.request, res.clone()).catch(() => {}));
+    if (isAsset(res)) event.waitUntil(cache.put(event.request, res.clone()).catch(() => {}));
     return res;
   } catch {
     // Never answer a script or font with the page; that breaks the app harder.
@@ -147,12 +140,17 @@ async function saveAsset(cache, path) {
   if (hit) return hit;
   try {
     const res = await fetch(path);
-    if (!res.ok) return null;
+    if (!isAsset(res)) return null;
     await cache.put(path, res.clone());
     return res;
   } catch {
     return null;
   }
+}
+
+/** A real script, style or font: not an error, and not an HTML page standing in for a missing file. */
+function isAsset(res) {
+  return res.ok && !(res.headers.get("content-type") ?? "").includes("text/html");
 }
 
 /** Drop hashed files that neither the current page nor the one before it uses. */
