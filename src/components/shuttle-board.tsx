@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import {
   DEPARTURES,
-  DIRECTION_COPY,
   CONTACT_FORM,
   DISPATCH_DISPLAY,
   DISPATCH_PHONE,
@@ -46,22 +45,23 @@ import {
   zoneFor,
   atOrlandoTime,
   type BoardSnapshot,
+  type DayPart,
   type MapApp,
   type Mode,
   type OrlandoNow,
   type PlaceState,
   type Zone,
 } from "@/lib/shuttle/logic";
-
-const PREFS_KEY = "bus-up-v1";
-
-type Prefs = {
-  mode: Mode;
-  walkMin: number;
-  chime: boolean;
-  awake: boolean;
-  locate: boolean;
-};
+import {
+  HTML_LANG,
+  LANGS,
+  MESSAGES,
+  detectLang,
+  langFromSearch,
+  type Lang,
+  type Messages,
+} from "@/lib/i18n";
+import { loadPrefs, savePrefs, type Prefs } from "@/lib/prefs";
 
 type Fix = {
   /** When the phone took the reading, epoch ms. */
@@ -70,14 +70,6 @@ type Fix = {
   hotelM: number;
   lotM: number;
   accuracyM: number;
-};
-
-const DEFAULT_PREFS: Prefs = {
-  mode: "auto",
-  walkMin: 3,
-  chime: false,
-  awake: false,
-  locate: false,
 };
 
 /** A reading older than this no longer counts for "you're at the stop". */
@@ -89,26 +81,17 @@ const ZONES: readonly PlaceState[] = ["at-hotel", "at-lot", "away", "fuzzy", "fa
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
-function loadPrefs(): Prefs {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return { ...DEFAULT_PREFS };
-    const parsed = JSON.parse(raw) as Partial<Prefs>;
-    const mode: Mode =
-      parsed.mode === "to-hotel" || parsed.mode === "from-hotel" || parsed.mode === "auto"
-        ? parsed.mode
-        : "auto";
-    const walkMin = Number(parsed.walkMin);
-    return {
-      mode,
-      walkMin: Number.isFinite(walkMin) ? Math.min(15, Math.max(0, Math.round(walkMin))) : 3,
-      chime: Boolean(parsed.chime),
-      awake: Boolean(parsed.awake),
-      locate: Boolean(parsed.locate),
-    };
-  } catch {
-    return { ...DEFAULT_PREFS };
-  }
+type Note = "noWakeLock" | "noChime";
+
+/** Saved settings, with a `?lang=` link taking over the language (and sticking). */
+function initialPrefs(): Prefs {
+  const prefs = loadPrefs();
+  const fromLink = langFromSearch(window.location.search);
+  return fromLink ? { ...prefs, lang: fromLink } : prefs;
+}
+
+function phoneLanguages(): readonly string[] {
+  return navigator.languages?.length ? navigator.languages : [navigator.language ?? "en"];
 }
 
 function isAppleDevice(): boolean {
@@ -154,79 +137,32 @@ function beep(ctx: AudioContext) {
   }
 }
 
-function agoLabel(seconds: number): string {
-  const minutes = Math.round(seconds / 60);
-  if (minutes <= 1) return "1 min ago";
-  return `${minutes} min ago`;
-}
-
-function walkLine(board: BoardSnapshot, atStop: boolean): { late: boolean; text: string } {
-  if (board.inGap) return { late: false, text: "Nothing is running in this window." };
-  if (board.next.boarding) return { late: false, text: "It's at the stop." };
-  if (atStop) return { late: false, text: "You're at the stop." };
-  if (board.next.waitSec > 30 * 60) {
-    return { late: false, text: "Plenty of time before you need to head out." };
-  }
-  if (board.walkMin === 0) return { late: false, text: "Walk time is zero — you're counting from the stop." };
+function walkLine(board: BoardSnapshot, atStop: boolean, t: Messages): { late: boolean; text: string } {
+  const w = t.walk;
+  if (board.inGap) return { late: false, text: w.inGap };
+  if (board.next.boarding) return { late: false, text: w.boarding };
+  if (atStop) return { late: false, text: w.atStop };
+  if (board.next.waitSec > 30 * 60) return { late: false, text: w.plenty };
+  if (board.walkMin === 0) return { late: false, text: w.zero };
   if (board.leaveInSec < 0) {
     const catchMin = board.catchMinutes;
     const catchable = catchMin != null && catchMin !== board.next.minutes;
-    return {
-      late: true,
-      text: catchable
-        ? `Too late for this one. Next you can catch is ${formatClock(catchMin)}.`
-        : "Too late for this one.",
-    };
+    return { late: true, text: catchable ? w.tooLateCatch(formatClock(catchMin)) : w.tooLate };
   }
   if (board.leaveInSec < 60) {
     const after = board.following[0];
-    return {
-      late: true,
-      text: after
-        ? `Leave now or you'll miss it. Next is ${formatClock(after.minutes)}.`
-        : "Leave now or you'll miss it.",
-    };
+    return { late: true, text: after ? w.leaveNowNext(formatClock(after.minutes)) : w.leaveNow };
   }
-  return {
-    late: false,
-    text: `Head out by ${formatClock(board.next.minutes - board.walkMin)} · ${board.walkMin} min to the stop`,
-  };
-}
-
-function placeTitle(place: PlaceState): string {
-  switch (place) {
-    case "pending":
-      return "Checking where you are";
-    case "at-hotel":
-      return "At the hotel stop";
-    case "at-lot":
-      return "At the lot pickup";
-    case "away":
-      return "Heading to the lot";
-    case "fuzzy":
-      return "Location is fuzzy";
-    case "far":
-      return "Coming in to the lot";
-    case "denied":
-      return "Location is off";
-    case "timeout":
-      return "Location timed out";
-    case "idle":
-      return "Not using location";
-    case "unavailable":
-      return "No location fix";
-    default:
-      return "Location unavailable";
-  }
+  return { late: false, text: w.headOut(formatClock(board.next.minutes - board.walkMin), board.walkMin) };
 }
 
 export function ShuttleBoard() {
   const live = useOrlandoNow();
-  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const [prefs, setPrefs] = useState<Prefs>(initialPrefs);
   const [place, setPlace] = useState<PlaceState>("idle");
   const [fix, setFix] = useState<Fix | null>(null);
   const [plan, setPlan] = useState<string>("");
-  const [wakeNote, setWakeNote] = useState<string | null>(null);
+  const [wakeNote, setWakeNote] = useState<Note | null>(null);
   const [chimeArmed, setChimeArmed] = useState(false);
   const [locateNonce, setLocateNonce] = useState(0);
   const [mapApp] = useState<MapApp>(() => (isAppleDevice() ? "apple" : "google"));
@@ -243,21 +179,25 @@ export function ShuttleBoard() {
   const wakeLock = useRef<WakeLockSentinel | null>(null);
   const locateGen = useRef(0);
 
+  const lang: Lang = prefs.lang ?? detectLang(phoneLanguages());
+  const t = MESSAGES[lang];
+
   useEffect(() => {
     // ?dir= shows that column for this visit only, so a scan never turns off Follow me for good.
-    // Drop it from the address so it doesn't stick to a home-screen icon.
+    // ?lang= is already saved. Drop both so they don't stick to a home-screen icon.
     const url = new URL(window.location.href);
-    if (!url.searchParams.has("dir")) return;
+    if (!url.searchParams.has("dir") && !url.searchParams.has("lang")) return;
     url.searchParams.delete("dir");
+    url.searchParams.delete("lang");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    } catch {
-      // Private mode or full storage: settings just won't stick.
-    }
+    document.documentElement.lang = HTML_LANG[lang];
+  }, [lang]);
+
+  useEffect(() => {
+    savePrefs(prefs);
   }, [prefs]);
 
   useEffect(() => {
@@ -330,7 +270,7 @@ export function ShuttleBoard() {
         wakeLock.current = await navigator.wakeLock.request("screen");
         setWakeNote(null);
       } catch {
-        if (!cancelled) setWakeNote("This browser won't keep the screen on.");
+        if (!cancelled) setWakeNote("noWakeLock");
       }
     };
     void acquire();
@@ -395,8 +335,8 @@ export function ShuttleBoard() {
     list.scrollTo({ top: Math.max(0, top) });
   }, [direction, board?.next.minutes, board?.next.boarding, plan]);
 
-  const summary = summaryText(direction, board);
-  const copy = direction ? DIRECTION_COPY[direction] : null;
+  const summary = summaryText(direction, board, t);
+  const copy = direction ? t.directions[direction] : null;
   const mismatch =
     mode !== "auto" &&
     ((place === "at-hotel" && direction === "to-hotel") ||
@@ -443,7 +383,7 @@ export function ShuttleBoard() {
     }
     const ctx = ensureAudio();
     if (!ctx) {
-      setWakeNote("This browser won't play a chime.");
+      setWakeNote("noChime");
       return;
     }
     void ctx.resume().catch(() => {});
@@ -477,12 +417,12 @@ export function ShuttleBoard() {
         {summary}
       </p>
 
-      <header className="mb-4 flex items-end justify-between gap-3">
+      <header className="mb-3 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display text-[1.85rem] leading-none font-semibold tracking-wide text-ivory sm:text-4xl">
             Next Bus Up
           </h1>
-          <p className="mt-1 text-sm text-mute">Dream Tree edition</p>
+          <p className="mt-1 text-sm text-mute">{t.header.tagline}</p>
         </div>
         <div className="shrink-0 text-right">
           <p
@@ -493,16 +433,25 @@ export function ShuttleBoard() {
           </p>
           <p className="mt-1 flex items-center justify-end gap-1.5 text-xs text-mute">
             <span className="live-dot inline-block size-1.5 rounded-full bg-signal" aria-hidden="true" />
-            {live ? `${live.weekday.slice(0, 3)} · ${live.dateLabel}` : "Orlando"} · Orlando time
+            {live
+              ? t.header.date(t.header.weekdaysShort[live.weekday], t.header.monthsShort[live.month - 1], live.day)
+              : t.header.orlando}{" "}
+            · {t.header.orlandoTime}
           </p>
         </div>
       </header>
+
+      <LanguagePicker
+        lang={lang}
+        label={t.languagePicker}
+        onChange={(next) => setPrefs((prev) => ({ ...prev, lang: next }))}
+      />
 
       <div className="grid items-start gap-4 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <div
             role="radiogroup"
-            aria-label="Which direction to show"
+            aria-label={t.switcher.label}
             className="grid grid-cols-2 gap-1 rounded-card bg-panel-2 p-1"
             onKeyDown={(event) => {
               if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
@@ -515,8 +464,8 @@ export function ShuttleBoard() {
               tabIndex={direction === "from-hotel" ? -1 : 0}
               tone="lot"
               onClick={() => choose("to-hotel")}
-              title="To hotel"
-              detail="Leaves the lot"
+              title={t.directions["to-hotel"].title}
+              detail={t.directions["to-hotel"].detail}
               icon={<Hotel className="size-5" aria-hidden="true" />}
               testId="direction-to"
             />
@@ -525,36 +474,36 @@ export function ShuttleBoard() {
               tabIndex={direction === "from-hotel" ? 0 : -1}
               tone="gate"
               onClick={() => choose("from-hotel")}
-              title="From hotel"
-              detail="Leaves the entrance"
+              title={t.directions["from-hotel"].title}
+              detail={t.directions["from-hotel"].detail}
               icon={<BusFront className="size-5" aria-hidden="true" />}
               testId="direction-from"
             />
           </div>
           <p className="mt-2 px-1 text-sm text-mute">
-            {copy ? copy.column : "Pick one column. The other stays hidden so it can't be misread."}
+            {copy ? copy.column : t.switcher.hint}
           </p>
 
           {mismatch ? (
             <p className="mt-2 px-1 text-sm text-alert">
               {place === "at-hotel"
-                ? "You're at the hotel stop, but this column is locked to the parking lot."
+                ? t.mismatch.atHotel
                 : place === "at-lot"
-                  ? "You're at the lot pickup, but this column is locked to the employee entrance."
-                  : "You're not at the hotel stop, but this column is locked to the employee entrance."}
+                  ? t.mismatch.atLot
+                  : t.mismatch.notAtHotel}
             </p>
           ) : null}
 
           <section className="mt-3 rounded-card border border-line bg-panel px-5 py-5" aria-live="off">
             {plan ? (
               <p className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-panel-2 px-3 py-2 text-sm text-ivory">
-                <span>Checking {formatPlan(plan)} instead of now.</span>
+                <span>{t.plan.checking(formatPlan(plan))}</span>
                 <button
                   type="button"
                   onClick={() => setPlan("")}
                   className={`min-h-11 rounded-full px-3 font-medium text-signal ${focusRing}`}
                 >
-                  Back to now
+                  {t.plan.back}
                 </button>
               </p>
             ) : null}
@@ -562,17 +511,15 @@ export function ShuttleBoard() {
             {!board || !copy || !direction ? (
               <div>
                 <p className="font-display text-3xl leading-none font-semibold tracking-wide text-ivory">
-                  Pick a side
+                  {t.pickSide.title}
                 </p>
-                <p className="mt-3 max-w-sm text-pretty text-mute">
-                  To hotel if you're heading to the shuttle lot. From hotel if you're at the employee
-                  entrance on Dream Tree Blvd.
-                </p>
+                <p className="mt-3 max-w-sm text-pretty text-mute">{t.pickSide.body}</p>
               </div>
             ) : (
               <Hero
                 board={board}
                 copy={copy}
+                t={t}
                 atStop={atStop}
                 mapHref={directionsUrl(direction, mapApp)}
               />
@@ -581,12 +528,12 @@ export function ShuttleBoard() {
             {board ? (
               <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
                 <p className="text-sm text-mute">
-                  Minutes to reach the stop
-                  {atStop ? <span className="block text-xs">Skipped while you're at the stop</span> : null}
+                  {t.walk.label}
+                  {atStop ? <span className="block text-xs">{t.walk.skipped}</span> : null}
                 </p>
                 <div className="flex items-center gap-2">
                   <StepButton
-                    label="Fewer minutes to the stop"
+                    label={t.walk.fewer}
                     onClick={() =>
                       setPrefs((prev) => ({ ...prev, walkMin: Math.max(0, prev.walkMin - 1) }))
                     }
@@ -597,7 +544,7 @@ export function ShuttleBoard() {
                     {prefs.walkMin}
                   </span>
                   <StepButton
-                    label="More minutes to the stop"
+                    label={t.walk.more}
                     onClick={() =>
                       setPrefs((prev) => ({ ...prev, walkMin: Math.min(15, prev.walkMin + 1) }))
                     }
@@ -609,17 +556,15 @@ export function ShuttleBoard() {
             ) : null}
           </section>
           <p className="mt-2 px-1 text-xs text-mute" data-testid="sheet-date">
-            Times published/updated as of {formatSheetDate()}
+            {t.sheetDate(formatSheetDate())}
           </p>
 
           <div className="mt-4 flex items-start justify-between gap-3 rounded-card border border-line bg-panel px-4 py-3">
             <div className="flex min-w-0 gap-3">
               <MapPin className="mt-0.5 size-5 shrink-0 text-signal" aria-hidden="true" />
               <div className="min-w-0">
-                <p className="font-medium text-ivory">{placeTitle(place)}</p>
-                <p className="text-sm text-mute">
-                  {placeDetail(place, mode, fix)}
-                </p>
+                <p className="font-medium text-ivory">{t.place[place]}</p>
+                <p className="text-sm text-mute">{placeDetail(place, mode, fix, t)}</p>
               </div>
             </div>
             {mode !== "auto" ? (
@@ -629,7 +574,7 @@ export function ShuttleBoard() {
                 className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-signal px-3 text-sm font-semibold text-signal-ink ${focusRing}`}
               >
                 <Unlock className="size-4" aria-hidden="true" />
-                Follow me
+                {t.placeButtons.followMe}
               </button>
             ) : !prefs.locate || place === "timeout" || place === "denied" || place === "unavailable" ? (
               <button
@@ -638,7 +583,7 @@ export function ShuttleBoard() {
                 className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-ivory ${focusRing}`}
               >
                 <MapPin className="size-4" aria-hidden="true" />
-                {prefs.locate ? "Try again" : "Use my location"}
+                {prefs.locate ? t.placeButtons.tryAgain : t.placeButtons.useLocation}
               </button>
             ) : (
               <button
@@ -648,7 +593,7 @@ export function ShuttleBoard() {
                 className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-ivory disabled:opacity-40 ${focusRing}`}
               >
                 <Lock className="size-4" aria-hidden="true" />
-                Lock
+                {t.placeButtons.lock}
               </button>
             )}
           </div>
@@ -658,14 +603,14 @@ export function ShuttleBoard() {
               pressed={prefs.awake}
               onClick={() => {
                 if (!("wakeLock" in navigator)) {
-                  setWakeNote("This browser won't keep the screen on.");
+                  setWakeNote("noWakeLock");
                   return;
                 }
                 setPrefs((prev) => ({ ...prev, awake: !prev.awake }));
               }}
             >
               <Clock className="size-4" aria-hidden="true" />
-              {prefs.awake ? "Screen stays on" : "Keep screen on"}
+              {prefs.awake ? t.tools.screenStaysOn : t.tools.keepScreenOn}
             </ToolButton>
             <ToolButton pressed={prefs.chime} onClick={armChime}>
               {prefs.chime ? (
@@ -673,19 +618,19 @@ export function ShuttleBoard() {
               ) : (
                 <BellOff className="size-4" aria-hidden="true" />
               )}
-              {prefs.chime ? (chimeArmed ? "Chime on" : "Tap to re-arm") : "Chime"}
+              {prefs.chime ? (chimeArmed ? t.tools.chimeOn : t.tools.rearm) : t.tools.chime}
             </ToolButton>
           </div>
-          {wakeNote ? <p className="mt-2 text-sm text-mute">{wakeNote}</p> : null}
+          {wakeNote ? <p className="mt-2 text-sm text-mute">{t.tools[wakeNote]}</p> : null}
 
           <label className="mt-3 flex min-h-11 items-center justify-between gap-3 rounded-card border border-line bg-panel px-4 py-2 text-sm">
-            <span className="text-mute">Check a different time</span>
+            <span className="text-mute">{t.plan.label}</span>
             <input
               type="time"
               value={plan}
               onChange={(event) => setPlan(event.target.value)}
               className={`min-h-11 bg-transparent text-ivory ${focusRing}`}
-              aria-label="Pretend the Orlando time is"
+              aria-label={t.plan.inputLabel}
             />
           </label>
         </div>
@@ -697,10 +642,10 @@ export function ShuttleBoard() {
             className="rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute"
           >
             <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
-              Today's times
+              {t.list.title}
             </summary>
             <div className="mt-3">
-              <p className="mb-2 text-sm text-mute">{copy ? copy.leaves : "One column"}</p>
+              <p className="mb-2 text-sm text-mute">{copy ? copy.leaves : t.list.oneColumn}</p>
               {direction && board ? (
                 <BoardList
                   direction={direction}
@@ -708,11 +653,10 @@ export function ShuttleBoard() {
                   next={board.next}
                   listRef={listRef}
                   nextRow={nextRow}
+                  t={t}
                 />
               ) : (
-                <p className="text-sm text-mute">
-                  The full board shows up once a column is selected. Only that column — never both.
-                </p>
+                <p className="text-sm text-mute">{t.list.empty}</p>
               )}
             </div>
           </details>
@@ -721,40 +665,27 @@ export function ShuttleBoard() {
 
       <details className="mt-6 rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
         <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
-          How the column gets picked
+          {t.how.title}
         </summary>
         <div className="mt-3 space-y-2 text-pretty">
-          <p>With location on, the column follows where you are:</p>
+          <p>{t.how.withLocation}</p>
           <ul className="space-y-1 text-ivory">
-            <li>At the employee entrance → From hotel</li>
-            <li>At the lot → To hotel</li>
-            <li>Anywhere else → To hotel, until you lock a column</li>
+            <li>{t.how.atEntrance}</li>
+            <li>{t.how.atLot}</li>
+            <li>{t.how.elsewhere}</li>
           </ul>
-          <p>If your location is too rough to tell, it asks you to pick.</p>
-          <p>
-            With location off, tap a column and it sticks on this phone. A stop's QR code shows that
-            column for that visit.
-          </p>
-          <p>
-            This board never sends your location anywhere. The map link only carries the stop's
-            position.
-          </p>
-          <p>
-            Keep screen on holds the display while you wait at the stop. Chime plays a short tone
-            when a bus is 5 minutes, 2 minutes, and 30 seconds out, and only while this page is open.
-          </p>
-          <p>
-            Shown in Orlando time even if your phone is set somewhere else. Nothing runs 1:30–3:00 AM.
-            After 11:50 PM the lot has no departure until 3:00 AM. The ride takes about {RIDE_MIN}{" "}
-            minutes and can run longer.
-          </p>
+          <p>{t.how.rough}</p>
+          <p>{t.how.locationOff}</p>
+          <p>{t.how.privacy}</p>
+          <p>{t.how.screenChime}</p>
+          <p>{t.how.orlando(RIDE_MIN)}</p>
         </div>
       </details>
       <details className="mt-3 rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
-        <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>Contact</summary>
+        <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>{t.contact.title}</summary>
         <div className="mt-3 space-y-3 text-pretty">
           <p>
-            Dispatch{" "}
+            {t.contact.dispatch}{" "}
             <a href={`tel:+1${DISPATCH_PHONE}`} className={`text-ivory underline ${focusRing}`}>
               {DISPATCH_DISPLAY}
             </a>
@@ -766,12 +697,9 @@ export function ShuttleBoard() {
               rel="noreferrer"
               className={`text-ivory underline ${focusRing}`}
             >
-              Shoutout and feedback
+              {t.contact.shoutout}
             </a>
-            <span className="mt-0.5 block">
-              Skyline form from the bus QR. Put your name, the shuttle time, and what happened. It
-              goes to P&C.
-            </span>
+            <span className="mt-0.5 block">{t.contact.shoutoutBody}</span>
           </p>
           <p>
             <a
@@ -780,40 +708,62 @@ export function ShuttleBoard() {
               rel="noreferrer"
               className={`text-ivory underline ${focusRing}`}
             >
-              App feedback
+              {t.contact.appFeedback}
             </a>
-            <span className="mt-0.5 block">
-              About this board, not the bus. Bugs, ideas, or a comment.
-            </span>
+            <span className="mt-0.5 block">{t.contact.appFeedbackBody}</span>
           </p>
         </div>
       </details>
       <details className="mt-3 rounded-card border border-line bg-panel px-4 py-3 text-sm text-mute">
         <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
-          Add it to your phone
+          {t.install.title}
         </summary>
         <div className="mt-3 space-y-2 text-pretty">
-          <p>
-            Opens full screen, like an app. The countdown is one tap away, and it still works when the
-            lot has a weak signal.
-          </p>
-          <p>An icon already on your home screen will not change. Delete it, then add it again.</p>
+          <p>{t.install.intro}</p>
+          <p>{t.install.existing}</p>
           <details className="rounded-card border border-line bg-panel-2 px-3 py-2">
             <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>Apple</summary>
-            <p className="mt-2">
-              Open this page in Safari. Share, then Add to Home Screen. Chrome on an iPhone cannot
-              set the icon.
-            </p>
+            <p className="mt-2">{t.install.apple}</p>
           </details>
           <details className="rounded-card border border-line bg-panel-2 px-3 py-2">
             <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>
               Android
             </summary>
-            <p className="mt-2">In Chrome: menu, then Install app.</p>
+            <p className="mt-2">{t.install.android}</p>
           </details>
         </div>
       </details>
     </main>
+  );
+}
+
+function LanguagePicker({
+  lang,
+  label,
+  onChange,
+}: {
+  lang: Lang;
+  label: string;
+  onChange: (lang: Lang) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="mb-3 flex flex-wrap gap-1.5">
+      {LANGS.map((code) => (
+        <button
+          key={code}
+          type="button"
+          lang={HTML_LANG[code]}
+          aria-pressed={code === lang}
+          data-testid={`lang-${code}`}
+          onClick={() => onChange(code)}
+          className={`inline-flex min-h-10 items-center rounded-full border px-3 text-xs font-medium ${focusRing} ${
+            code === lang ? "border-signal bg-signal text-signal-ink" : "border-line text-ivory"
+          }`}
+        >
+          {MESSAGES[code].languageName}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -869,21 +819,23 @@ function DirectionButton({
 function Hero({
   board,
   copy,
+  t,
   atStop,
   mapHref,
 }: {
   board: BoardSnapshot;
-  copy: (typeof DIRECTION_COPY)[Direction];
+  copy: Messages["directions"][Direction];
+  t: Messages;
   atStop: boolean;
   mapHref: string;
 }) {
-  const late = walkLine(board, atStop);
+  const late = walkLine(board, atStop, t);
   const rideFrom = rideDeparture(board);
   const hot = !board.next.boarding && board.next.waitSec < 60 && !board.inGap;
   const tone = columnTone(board.direction);
-  const eyebrow = board.inGap ? "No bus" : board.next.boarding ? "Leaving now" : `Next bus ${copy.title.toLowerCase()}`;
-  const countdown = board.next.boarding ? "NOW" : formatCountdown(board.next.waitSec);
-  const countLabel = board.inGap ? "Service resumes in" : board.next.boarding ? "At the stop" : "Leaves in";
+  const eyebrow = board.inGap ? t.hero.noBus : board.next.boarding ? t.hero.leavingNow : copy.nextBus;
+  const countdown = board.next.boarding ? t.hero.now : formatCountdown(board.next.waitSec);
+  const countLabel = board.inGap ? t.hero.resumesIn : board.next.boarding ? t.hero.atStop : t.hero.leavesIn;
 
   return (
     <div>
@@ -893,29 +845,27 @@ function Hero({
       </p>
       <p className="mt-3 font-display text-5xl leading-none font-semibold tracking-wide text-ivory">
         <span className="whitespace-nowrap">
-          {board.inGap ? "1:30–3:00 AM" : formatClock(board.next.minutes)}
+          {board.inGap ? t.hero.gapHours : formatClock(board.next.minutes)}
         </span>
         {board.next.tomorrow && !board.inGap ? (
           <span className="ml-2 align-middle font-sans text-base font-medium tracking-normal text-mute normal-case">
-            tomorrow
+            {t.hero.tomorrow}
           </span>
         ) : null}
       </p>
       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-mute">
         <span>
-          {board.inGap
-            ? `Back at ${formatClock(board.next.minutes)} · ${copy.stop}`
-            : `Stand at the ${copy.stop.toLowerCase()}`}
+          {board.inGap ? copy.backAt(formatClock(board.next.minutes)) : copy.standAt}
         </span>
         <a
           href={mapHref}
           target="_blank"
           rel="noreferrer"
-          aria-label={copy.directions}
+          aria-label={copy.mapLabel}
           className={`inline-flex min-h-11 items-center gap-1 font-medium text-ivory underline underline-offset-4 ${focusRing}`}
         >
           <Navigation className="size-3.5" aria-hidden="true" />
-          Map
+          {t.hero.map}
         </a>
       </p>
       <p className="mt-5 text-sm text-mute">{countLabel}</p>
@@ -935,14 +885,12 @@ function Hero({
           />
         </div>
       ) : null}
-      {board.inGap ? <Callout kind="gap" resume={formatClock(board.next.minutes)} /> : null}
-      {board.lotCallout ? <Callout kind="lot" resume={formatClock(board.next.minutes)} /> : null}
+      {board.inGap ? <Callout kind="gap" resume={formatClock(board.next.minutes)} t={t} /> : null}
+      {board.lotCallout ? <Callout kind="lot" resume={formatClock(board.next.minutes)} t={t} /> : null}
       {board.entranceStationed && !board.inGap ? (
         <aside className="mt-4 rounded-2xl border border-line px-4 py-4">
-          <p className="font-medium text-ivory">
-            The lot has no bus until 3:00 AM. This column still leaves from the employee entrance.
-          </p>
-          <p className="mt-1 text-sm text-pretty text-mute">Next one is {formatClock(board.next.minutes)}.</p>
+          <p className="font-medium text-ivory">{t.hero.stationedTitle}</p>
+          <p className="mt-1 text-sm text-pretty text-mute">{t.hero.stationedNext(formatClock(board.next.minutes))}</p>
         </aside>
       ) : null}
       {board.inGap || board.lotCallout ? null : (
@@ -950,13 +898,14 @@ function Hero({
       )}
       {board.inGap || board.lotCallout || rideFrom === null ? null : (
         <p className="mt-1 text-sm text-mute" data-testid="arrival">
-          {copy.arrives} around {formatClock(rideFrom + RIDE_MIN)}
-          {rideFrom === board.next.minutes ? "" : ` on the ${formatClock(rideFrom)} bus`} · about {RIDE_MIN}{" "}
-          min, can run longer
+          {rideFrom === board.next.minutes
+            ? copy.arrives(formatClock(rideFrom + RIDE_MIN))
+            : copy.arrivesOn(formatClock(rideFrom + RIDE_MIN), formatClock(rideFrom))}{" "}
+          · {t.hero.rideNote(RIDE_MIN)}
         </p>
       )}
       {board.following.length > 0 && !board.inGap ? (
-        <ul className="mt-4 flex flex-wrap gap-2" aria-label="Next three departures">
+        <ul className="mt-4 flex flex-wrap gap-2" aria-label={t.hero.nextThree}>
           {board.following.map((hit) => (
             <li
               key={`${hit.minutes}-${hit.waitSec}`}
@@ -969,33 +918,25 @@ function Hero({
       ) : null}
       {board.last && !board.next.boarding && !board.inGap ? (
         <p className="mt-3 text-sm text-mute">
-          Last one left {agoLabel(board.last.agoSec)} · {formatClock(board.last.minutes)}
+          {t.hero.lastLeft(Math.round(board.last.agoSec / 60), formatClock(board.last.minutes))}
         </p>
       ) : null}
     </div>
   );
 }
 
-function Callout({ kind, resume }: { kind: "gap" | "lot"; resume: string }) {
+function Callout({ kind, resume, t }: { kind: "gap" | "lot"; resume: string; t: Messages }) {
   const lot = kind === "lot";
   return (
     <aside className="mt-4 rounded-2xl border border-alert px-4 py-4">
-      <p className="font-medium text-ivory">
-        {lot
-          ? "The shuttle should be waiting at the resort employee entrance."
-          : `Nothing is scheduled until ${resume}.`}
-      </p>
-      <p className="mt-1 text-sm text-pretty text-mute">
-        {lot
-          ? "If you don't see it, call for an employee pickup from the lot."
-          : "If you still need a ride, call dispatch."}
-      </p>
+      <p className="font-medium text-ivory">{lot ? t.callout.lotTitle : t.callout.gapTitle(resume)}</p>
+      <p className="mt-1 text-sm text-pretty text-mute">{lot ? t.callout.lotBody : t.callout.gapBody}</p>
       <a
         href={`tel:+1${DISPATCH_PHONE}`}
         className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-signal px-4 text-sm font-semibold text-signal-ink ${focusRing}`}
       >
         <Phone className="size-4" aria-hidden="true" />
-        Call {DISPATCH_DISPLAY}
+        {t.callout.call(DISPATCH_DISPLAY)}
       </a>
     </aside>
   );
@@ -1007,16 +948,18 @@ function BoardList({
   next,
   listRef,
   nextRow,
+  t,
 }: {
   direction: Direction;
   nowSec: number;
   next: BoardSnapshot["next"];
   listRef: RefObject<HTMLUListElement | null>;
   nextRow: RefObject<HTMLLIElement | null>;
+  t: Messages;
 }) {
   const times = [...DEPARTURES[direction]].sort((a, b) => serviceRank(a) - serviceRank(b));
   const tone = columnTone(direction);
-  const groups: { label: string; times: number[] }[] = [];
+  const groups: { label: DayPart; times: number[] }[] = [];
   for (const time of times) {
     const label = listLabel(time);
     const last = groups[groups.length - 1];
@@ -1032,7 +975,7 @@ function BoardList({
       {groups.map((group) => (
         <li key={group.label} className="list-none">
           <p className="sticky top-0 bg-panel-2 px-4 py-2 text-xs tracking-wide text-mute uppercase">
-            {group.label}
+            {t.list.parts[group.label]}
           </p>
           <ul>
             {group.times.map((time) => {
@@ -1050,7 +993,7 @@ function BoardList({
                     {formatClock(time)}
                   </span>
                   <span className="text-xs tracking-wide uppercase">
-                    {isNext ? (next.boarding ? "Now" : "Next") : past ? "Left" : ""}
+                    {isNext ? (next.boarding ? t.list.now : t.list.next) : past ? t.list.left : ""}
                   </span>
                 </li>
               );
@@ -1108,54 +1051,48 @@ function StepButton({
   );
 }
 
-function placeDetail(place: PlaceState, mode: Mode, fix: Fix | null): string {
-  const where = fix ? pinDistance(fix) : null;
-  if (mode !== "auto") {
-    return where ? `Column locked · ${where}` : "Column locked · not using your pin";
-  }
+function placeDetail(place: PlaceState, mode: Mode, fix: Fix | null, t: Messages): string {
+  const d = t.placeDetail;
+  const where = fix ? pinDistance(fix, t) : null;
+  if (mode !== "auto") return where ? d.locked(where) : d.lockedNoPin;
   switch (place) {
     case "pending":
-      return "Looking for the hotel stop and the lot pickup";
+      return d.pending;
     case "at-hotel":
-      return where ? `${where} · entrance column` : "Showing buses that leave the entrance";
+      return where ? d.entranceColumn(where) : d.showingEntrance;
     case "at-lot":
-      return where ? `${where} · parking-lot column` : "Showing buses that leave the lot";
     case "away":
-      return where ? `${where} · parking-lot column` : "Showing buses that leave the lot";
-    case "fuzzy":
-      return "Too uncertain to pick a column. Use the switch.";
     case "far":
-      return where ? `${where} · parking-lot column` : "Showing buses that leave the lot";
+      return where ? d.lotColumn(where) : d.showingLot;
+    case "fuzzy":
+      return d.fuzzy;
     case "denied":
-      return "Allow location, or use the switch. It will stick.";
+      return d.denied;
     case "timeout":
-      return "That reading was too slow. Try again, or use the switch.";
+      return d.timeout;
     case "unavailable":
-      return "This phone couldn't get a position. Use the switch.";
+      return d.unavailable;
     case "idle":
-      return "Turn location on if you want the column picked for you.";
+      return d.idle;
     default:
-      return "Use the switch. It will stick on this phone.";
+      return d.other;
   }
 }
 
-function pinDistance(fix: Fix): string {
-  if (fix.zone === "at-lot" || fix.zone === "away" || fix.zone === "far") {
-    return `${formatDistance(fix.lotM)} from the lot pickup`;
-  }
-  if (fix.zone === "at-hotel") return `${formatDistance(fix.hotelM)} from the hotel stop`;
-  return fix.lotM <= fix.hotelM
-    ? `${formatDistance(fix.lotM)} from the lot pickup`
-    : `${formatDistance(fix.hotelM)} from the hotel stop`;
+function pinDistance(fix: Fix, t: Messages): string {
+  const d = t.placeDetail;
+  if (fix.zone === "at-lot" || fix.zone === "away" || fix.zone === "far") return d.fromLot(formatDistance(fix.lotM));
+  if (fix.zone === "at-hotel") return d.fromHotel(formatDistance(fix.hotelM));
+  return fix.lotM <= fix.hotelM ? d.fromLot(formatDistance(fix.lotM)) : d.fromHotel(formatDistance(fix.hotelM));
 }
 
-function summaryText(direction: Direction | null, board: BoardSnapshot | null): string {
-  if (!direction || !board) return "Choose to hotel or from hotel.";
-  const stop = DIRECTION_COPY[direction].stop;
-  if (board.inGap) return `No bus. Service resumes at ${formatClock(board.next.minutes)} from the ${stop}.`;
-  if (board.next.boarding) return `${formatClock(board.next.minutes)} is leaving now from the ${stop}.`;
-  const minutes = Math.max(0, Math.ceil(board.next.waitSec / 60));
-  return `Next bus ${formatClock(board.next.minutes)} from the ${stop}, about ${minutes} minutes.`;
+function summaryText(direction: Direction | null, board: BoardSnapshot | null, t: Messages): string {
+  if (!direction || !board) return t.switcher.summary;
+  const copy = t.directions[direction];
+  const time = formatClock(board.next.minutes);
+  if (board.inGap) return copy.summaryGap(time);
+  if (board.next.boarding) return copy.summaryBoarding(time);
+  return copy.summaryNext(time, Math.max(0, Math.ceil(board.next.waitSec / 60)));
 }
 
 function formatPlan(value: string): string {

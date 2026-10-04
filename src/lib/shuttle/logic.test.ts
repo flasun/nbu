@@ -13,6 +13,8 @@ import {
   haversineMeters,
   isAtStop,
   isDeparturePast,
+  listLabel,
+  readOrlando,
   resolveDirection,
   rideDeparture,
   serviceRank,
@@ -289,5 +291,25 @@ describe("arrival estimate", () => {
   it("follows the next bus when the walk is zero", () => {
     const board = boardAt("from-hotel", min("5:14PM") * 60, 0);
     assert.equal(rideDeparture(board), min("5:15PM"));
+  });
+});
+
+describe("Orlando calendar", () => {
+  it("reads the Orlando date even when the phone is somewhere else", () => {
+    // 11:30 PM Saturday Oct 3 in Orlando is already Sunday Oct 4 in UTC.
+    const now = readOrlando(new Date("2026-10-04T03:30:00Z"));
+    assert.equal(now.weekday, 6);
+    assert.equal(now.month, 10);
+    assert.equal(now.day, 3);
+    assert.equal(now.clock, "11:30:00 PM");
+  });
+
+  it("groups the list by time of day", () => {
+    assert.equal(listLabel(min("12:15AM")), "after-midnight");
+    assert.equal(listLabel(min("3:00AM")), "early-morning");
+    assert.equal(listLabel(min("7:30AM")), "morning");
+    assert.equal(listLabel(min("1:00PM")), "afternoon");
+    assert.equal(listLabel(min("6:00PM")), "evening");
+    assert.equal(listLabel(min("10:00PM")), "night");
   });
 });
