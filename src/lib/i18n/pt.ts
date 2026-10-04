@@ -236,21 +236,22 @@ export const pt: Messages = {
   },
 
   poster: {
-    title: "Cartazes QR",
+    title: "Cartazes com QR code",
     intro:
-      "Imprima e coloque cada um no lugar indicado. O código de um ponto abre o app na coluna desse ponto, só nessa visita.",
+      "Imprima os cartazes e coloque cada um no lugar indicado. O QR code de um ponto abre o app na coluna desse ponto, só nessa visita.",
     print: "Imprimir",
     printThis: "Imprimir este",
     paper: "Carta ou A4, retrato. Cada cartaz sai em uma página.",
     temporary: (host: string) =>
-      `Estes códigos abrem ${host}, um endereço temporário. Imprima quando o endereço final estiver pronto, para não precisar imprimir de novo.`,
+      `Estes códigos abrem ${host}, um endereço temporário. Imprima os cartazes quando o endereço definitivo estiver pronto, para não precisar imprimir de novo.`,
+    check: "Depois de colocar o cartaz, escaneie ali mesmo. O app deve abrir na coluna indicada no cartaz.",
     putUp: {
       "to-hotel": "Coloque este no ponto do estacionamento.",
       "from-hotel": "Coloque este na entrada de funcionários.",
       anywhere: "Coloque este num mural de avisos ou perto do relógio de ponto. Ele abre o app sem escolher uma coluna.",
     },
     anywhereTitle: "Horários",
-    anywhereDetail: "Estacionamento e entrada",
+    anywhereDetail: "Ônibus: estacionamento e entrada",
     scan: "Escaneie para ver o próximo ônibus",
     codeLabel: (url: string) => `Código QR que abre ${url}`,
   },

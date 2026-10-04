@@ -242,13 +242,14 @@ export const es: Messages = {
     paper: "Carta o A4, vertical. Cada cartel sale en su propia hoja.",
     temporary: (host: string) =>
       `Estos códigos abren ${host}, una dirección temporal. Imprímelos cuando la dirección final esté lista, para no tener que imprimirlos de nuevo.`,
+    check: "Cuando el cartel esté puesto, escanéalo ahí mismo. La app debe abrir en la columna que dice el cartel.",
     putUp: {
       "to-hotel": "Pon este en la parada del estacionamiento.",
       "from-hotel": "Pon este en la entrada de empleados.",
-      anywhere: "Pon este en un tablero de anuncios o junto al reloj de marcar. Abre la app sin elegir una columna.",
+      anywhere: "Pon este en un tablero de anuncios o junto al reloj de marcar. Su código abre la app sin elegir una columna.",
     },
     anywhereTitle: "Horarios",
-    anywhereDetail: "Estacionamiento y entrada",
+    anywhereDetail: "Autobús al hotel y del hotel",
     scan: "Escanea para ver el próximo autobús",
     codeLabel: (url: string) => `Código QR que abre ${url}`,
   },

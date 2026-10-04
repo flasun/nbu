@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { BusFront, Clock, Hotel, Phone, Printer, TriangleAlert } from "lucide-react";
+import { Fragment, useId, useMemo, useState } from "react";
+import { ArrowRight, Clock, Hotel, Phone, Printer, SquareParking, TriangleAlert } from "lucide-react";
 import QRCode from "qrcode";
 import { HTML_LANG, LANGS, MESSAGES, type Lang } from "@/lib/i18n";
 import {
   POSTER_KINDS,
   QUIET_ZONE,
   isTemporaryHost,
+  posterOrigin,
   posterUrl,
   printedUrl,
   qrPath,
@@ -16,7 +17,15 @@ import { DISPATCH_DISPLAY } from "@/lib/shuttle/schedule";
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
-const ICONS = { "to-hotel": Hotel, "from-hotel": BusFront, anywhere: Clock } as const;
+/** The route, starting at the stop the poster hangs at, so the two stop posters differ in black and white too. */
+const ROUTES = { "to-hotel": [SquareParking, Hotel], "from-hotel": [Hotel, SquareParking] } as const;
+
+/** Each word once, tagged with the first language that uses it ("Dispatch" is English and Kreyòl). */
+const DISPATCH_WORDS: [string, Lang][] = [];
+for (const lang of LANGS) {
+  const word = MESSAGES[lang].contact.dispatch;
+  if (!DISPATCH_WORDS.some(([seen]) => seen === word)) DISPATCH_WORDS.push([word, lang]);
+}
 
 /**
  * Printable posters for the stops. The codes open the address this page is on, so open it on
@@ -25,7 +34,9 @@ const ICONS = { "to-hotel": Hotel, "from-hotel": BusFront, anywhere: Clock } as 
  */
 export function QrPosters({ lang }: { lang: Lang }) {
   const t = MESSAGES[lang].poster;
-  const { origin, host, hostname } = window.location;
+  const { protocol, host, hostname } = window.location;
+  const origin = posterOrigin(protocol, host, hostname);
+  const ids = useId();
   /**
    * Posters to print. A plain on-page choice rather than print events, so the browser's own
    * Print menu prints the same thing, and phones that report "done printing" early can't undo it.
@@ -69,6 +80,7 @@ export function QrPosters({ lang }: { lang: Lang }) {
           </button>
           <span className="text-sm text-mute">{t.paper}</span>
         </div>
+        <p className="mt-2 text-sm text-mute">{t.check}</p>
       </header>
 
       <div className="poster-list">
@@ -86,16 +98,17 @@ export function QrPosters({ lang }: { lang: Lang }) {
                 <Poster kind={kind} url={url} label={t.codeLabel(url)} />
               </div>
               <figcaption className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-mute print:hidden">
-                <span>{t.putUp[kind]}</span>
+                <span id={`${ids}-${kind}-where`}>{t.putUp[kind]}</span>
                 <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-ivory has-focus-visible:ring-2 has-focus-visible:ring-signal">
                   <input
                     type="checkbox"
                     checked={!skipped}
                     onChange={(event) => toggle(kind, event.target.checked)}
+                    aria-labelledby={`${ids}-${kind}-print ${ids}-${kind}-where`}
                     data-testid={`pick-${kind}`}
                     className="size-4 accent-signal focus:outline-none"
                   />
-                  {t.printThis}
+                  <span id={`${ids}-${kind}-print`}>{t.printThis}</span>
                 </label>
               </figcaption>
             </figure>
@@ -108,14 +121,23 @@ export function QrPosters({ lang }: { lang: Lang }) {
 
 /** One printed page: the column's color, its name in four languages, the code, and dispatch. */
 function Poster({ kind, url, label }: { kind: PosterKind; url: string; label: string }) {
-  const Icon = ICONS[kind];
-  const dispatch = [...new Map(LANGS.map((lang) => [MESSAGES[lang].contact.dispatch, lang])).entries()];
   return (
     <div className="poster-sheet" data-kind={kind}>
       <div className="poster-inner">
         <div className="poster-band">
           <span className="poster-brand">Next Bus Up</span>
-          <Icon className="poster-icon" aria-hidden="true" />
+          <span className="poster-route" aria-hidden="true">
+            {kind === "anywhere" ? (
+              <Clock className="poster-icon" />
+            ) : (
+              ROUTES[kind].map((Stop, i) => (
+                <Fragment key={i}>
+                  {i > 0 ? <ArrowRight className="poster-arrow" /> : null}
+                  <Stop className="poster-icon" />
+                </Fragment>
+              ))
+            )}
+          </span>
         </div>
 
         <div className="poster-titles">
@@ -150,11 +172,11 @@ function Poster({ kind, url, label }: { kind: PosterKind; url: string; label: st
           </p>
           <p className="poster-phone">
             <Phone className="poster-phone-icon" aria-hidden="true" />
-            {dispatch.map(([word, lang], i) => (
-              <span key={lang} lang={HTML_LANG[lang]}>
+            {DISPATCH_WORDS.map(([word, lang], i) => (
+              <Fragment key={lang}>
                 {i > 0 ? " · " : ""}
-                {word}
-              </span>
+                <span lang={HTML_LANG[lang]}>{word}</span>
+              </Fragment>
             ))}{" "}
             <span className="poster-number">{DISPATCH_DISPLAY}</span>
           </p>

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import QRCode from "qrcode";
 import { directionFromSearch } from "./shuttle/logic.ts";
-import { POSTER_KINDS, isTemporaryHost, posterUrl, printedUrl, qrPath } from "./poster.ts";
+import { POSTER_KINDS, isTemporaryHost, posterOrigin, posterUrl, printedUrl, qrPath } from "./poster.ts";
 
 describe("poster links", () => {
   it("opens each stop's column, and the plain board for the notice board", () => {
@@ -16,6 +16,15 @@ describe("poster links", () => {
       const { search } = new URL(posterUrl("https://bus.example.com", kind));
       assert.equal(directionFromSearch(search), kind === "anywhere" ? null : kind);
     }
+  });
+
+  it("prints https codes for a real domain opened over http", () => {
+    assert.equal(posterOrigin("http:", "bus.example.com", "bus.example.com"), "https://bus.example.com");
+    assert.equal(posterOrigin("https:", "bus.example.com", "bus.example.com"), "https://bus.example.com");
+    assert.equal(posterOrigin("http:", "x.someone.workers.dev", "x.someone.workers.dev"), "https://x.someone.workers.dev");
+    assert.equal(posterOrigin("http:", "127.0.0.1:4173", "127.0.0.1"), "http://127.0.0.1:4173");
+    assert.equal(posterOrigin("http:", "localhost:5173", "localhost"), "http://localhost:5173");
+    assert.equal(posterOrigin("http:", "mac-mini.local:4173", "mac-mini.local"), "http://mac-mini.local:4173");
   });
 
   it("prints a short address", () => {
@@ -38,13 +47,19 @@ describe("temporary addresses", () => {
       "127.0.0.1",
       "192.168.1.20",
       "[::1]",
+      "devbox",
+      "mac-mini.local",
+      "nbu.home.arpa",
+      "box.lan",
+      "abc.ngrok-free.app",
+      "x.loca.lt",
     ]) {
       assert.equal(isTemporaryHost(host), true, host);
     }
   });
 
   it("trusts a real domain", () => {
-    for (const host of ["bus.example.com", "nextbusup.org", "workers.dev.example.com", "BUS.EXAMPLE.COM."]) {
+    for (const host of ["bus.example.com", "nextbusup.org", "workers.dev.example.com", "BUS.EXAMPLE.COM.", "notlocal.com"]) {
       assert.equal(isTemporaryHost(host), false, host);
     }
   });

@@ -76,10 +76,25 @@ Each poster has its column's color from the board, the column name and "Scan for
 all four languages, the address in print for anyone who can't scan, and the dispatch number. The
 codes are drawn in the browser, so nothing is sent anywhere.
 
-The codes open the address the page is on. Print from the address you'll keep: the page warns you
-when it's a temporary one (`workers.dev`, a preview link, `localhost`). If you print from a
+The codes open the address the page is on (always over `https`). Print from the address you'll
+keep: the page warns you when it's a temporary one (`workers.dev`, a preview link, `localhost`, a
+local network name). If you print from a
 `workers.dev` address and add your own domain later, leave the `workers.dev` address turned on
 (**Worker → Settings → Domains & Routes**) so the posters keep working.
+
+Once a poster is up, scan it right there: the board should open on the column printed on it.
+
+Hanging them:
+
+- Code at about chest height (1.2–1.5 m), where riders can walk right up. It scans from about
+  1–1.5 m, not from across the stop.
+- Outdoors, use a matte sheet protector or matte lamination. Glossy plastic throws glare that stops
+  phones reading the code. A laser printer holds up better in the rain than inkjet.
+- Sun fades the color band; the black code keeps working. Reprint when the color is gone.
+- For a shelter wall, print on 11×17 (Tabloid) at 135% or A3 at 140%. Each poster still fits on one
+  page, with a code about 13 cm wide.
+- If a date or web address prints along the page edge, turn off **Headers and footers** in the
+  print dialog.
 
 ## Deploy on Cloudflare
 

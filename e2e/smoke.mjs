@@ -212,6 +212,15 @@ test("prints a poster for each stop, with a code that opens its column", async (
   }
   // 127.0.0.1 is no address to print.
   await assert.doesNotReject(page.getByTestId("temporary").waitFor());
+  // Each checkbox says which poster it is; each dispatch word is read in its own language.
+  await assert.doesNotReject(
+    page.getByRole("checkbox", { name: "Print this one Put this one up at the employee entrance." }).waitFor(),
+  );
+  const dispatch = await page
+    .getByTestId("poster-to-hotel")
+    .locator(".poster-phone [lang]")
+    .evaluateAll((nodes) => nodes.map((node) => `${node.lang}:${node.textContent}`));
+  assert.deepEqual(dispatch, ["en:Dispatch", "es:Despacho", "pt-BR:Central"]);
 
   // One poster per page on both paper sizes, with a big code and nothing cut off.
   for (const format of ["Letter", "A4"]) {

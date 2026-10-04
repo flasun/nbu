@@ -296,6 +296,8 @@ export const en = {
     /** Warning when this page is open on an address that will change, e.g. "next-bus-up.example.workers.dev". */
     temporary: (host: string) =>
       `These codes open ${host}, a temporary address. Print them once the final address is set up, so they never need reprinting.`,
+    /** Under the print button. Shown on screen, never printed. */
+    check: "Once a poster is up, scan it right there. The board should open on the column printed on the poster.",
     /** Where each poster goes. Shown on screen, never printed. */
     putUp: {
       "to-hotel": "Put this one up at the parking-lot pickup.",
