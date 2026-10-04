@@ -5,7 +5,9 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { after, before, test } from "node:test";
+import jsQR from "jsqr";
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
 
 const MOBILE = { width: 390, height: 844 };
 
@@ -165,6 +167,109 @@ test("opens a shared ?lang= link in that language", async () => {
   assert.equal(await page.evaluate(() => document.documentElement.lang), "ht");
   assert.equal(await page.getByTestId("direction-from").getAttribute("aria-checked"), "true");
   assert.equal(new URL(page.url()).search, "", "?lang= and ?dir= are dropped from the address");
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+/** The text a phone reads from the QR code in a screenshot, or null if it can't read one. */
+function readQr(screenshot) {
+  const { data, width, height } = PNG.sync.read(screenshot);
+  const pixels = new Uint8ClampedArray(data.buffer, data.byteOffset, data.length);
+  return jsQR(pixels, width, height)?.data ?? null;
+}
+
+function pdfPages(pdf) {
+  return (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+}
+
+async function openPosters(path = "poster", viewport = { width: 1280, height: 900 }) {
+  const context = await browser.newContext({ viewport });
+  await context.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.abort());
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
+  await page.goto(BASE + path, { waitUntil: "load" });
+  await page.getByTestId("qr").first().waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  return { context, page, errors };
+}
+
+test("prints a poster for each stop, with a code that opens its column", async () => {
+  const { context, page, errors } = await openPosters();
+  const expected = {
+    "to-hotel": `${BASE}?dir=to`,
+    "from-hotel": `${BASE}?dir=from`,
+    anywhere: BASE,
+  };
+  for (const [kind, url] of Object.entries(expected)) {
+    const poster = page.getByTestId(`poster-${kind}`);
+    assert.equal(readQr(await poster.getByTestId("qr").screenshot()), url, `${kind} code`);
+    assert.equal(
+      await poster.getByTestId("poster-url").innerText(),
+      url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+    );
+  }
+  // 127.0.0.1 is no address to print.
+  await assert.doesNotReject(page.getByTestId("temporary").waitFor());
+
+  // One poster per page on both paper sizes, with a big code and nothing cut off.
+  for (const format of ["Letter", "A4"]) {
+    assert.equal(pdfPages(await page.pdf({ format })), 3, `${format} pages`);
+  }
+  await page.emulateMedia({ media: "print" });
+  const sheets = await page.locator(".poster-sheet").evaluateAll((nodes) =>
+    nodes.map((sheet) => {
+      const box = sheet.getBoundingClientRect();
+      const mm = (px) => (px / 96) * 25.4;
+      const spills = [...sheet.querySelectorAll("*")].filter((node) => {
+        const r = node.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5 || r.bottom > box.bottom + 0.5;
+      });
+      return {
+        width: Math.round(mm(box.width)),
+        height: Math.round(mm(box.height)),
+        code: Math.round(mm(sheet.querySelector('[data-testid="qr"]').getBoundingClientRect().width)),
+        spills: spills.length,
+      };
+    }),
+  );
+  for (const sheet of sheets) {
+    assert.deepEqual({ ...sheet, code: sheet.code >= 85 }, { width: 190, height: 250, code: true, spills: 0 });
+  }
+  assert.equal(await page.locator("header").isVisible(), false, "the buttons don't print");
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("prints just one poster when asked", async () => {
+  const { context, page, errors } = await openPosters();
+  await page.evaluate(() => {
+    window.print = () => (window.printed = (window.printed ?? 0) + 1);
+  });
+  await page.getByTestId("print-from-hotel").click();
+  assert.equal(await page.evaluate(() => window.printed), 1);
+  await page.emulateMedia({ media: "print" });
+  const visible = await page.locator("figure").evaluateAll((nodes) =>
+    nodes.filter((node) => node.offsetParent !== null).map((node) => node.dataset.testid),
+  );
+  assert.deepEqual(visible, ["poster-from-hotel"]);
+  await page.emulateMedia({ media: null });
+  assert.equal(pdfPages(await page.pdf({ format: "Letter" })), 1);
+
+  // Closing the print dialog brings the others back.
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  assert.equal(pdfPages(await page.pdf({ format: "Letter" })), 3);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("shows the poster page in the reader's language, without sideways scrolling", async () => {
+  const { context, page, errors } = await openPosters("poster?lang=es", { width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "es");
+  assert.equal(await page.title(), "Carteles QR · Next Bus Up");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  assert.equal(overflow, false);
   assert.deepEqual(errors, []);
   await context.close();
 });

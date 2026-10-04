@@ -59,8 +59,28 @@ reads them from the manifest, which cannot follow the language a rider picks.
 - `/?dir=to` opens the parking-lot column ("To hotel").
 - `/?dir=from` opens the employee-entrance column ("From hotel").
 
-The column applies to that visit only and never changes a rider's saved setting. Print the posters
-once the domain is final, so they don't need reprinting.
+The column applies to that visit only and never changes a rider's saved setting.
+
+### Printing the posters
+
+Open **`/poster`** on the site (for example `https://your-address/poster`) and press **Print all**,
+or **Print this one** under a single poster. There are three, one per page, on Letter or A4 paper
+in portrait:
+
+| Poster          | Opens        | Put it up                              |
+| --------------- | ------------ | -------------------------------------- |
+| To hotel        | `/?dir=to`   | at the parking-lot pickup              |
+| From hotel      | `/?dir=from` | at the employee entrance               |
+| Bus times       | `/`          | on a notice board or by the time clock |
+
+Each poster has its column's color from the board, the column name and "Scan for the next bus" in
+all four languages, the address in print for anyone who can't scan, and the dispatch number. The
+codes are drawn in the browser, so nothing is sent anywhere.
+
+The codes open the address the page is on. Print from the address you'll keep: the page warns you
+when it's a temporary one (`workers.dev`, a preview link, `localhost`). If you print from a
+`workers.dev` address and add your own domain later, leave the `workers.dev` address turned on
+(**Worker → Settings → Domains & Routes**) so the posters keep working.
 
 ## Deploy on Cloudflare
 

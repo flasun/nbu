@@ -1,0 +1,190 @@
+/*
+ * QR posters at /poster: one poster per printed page, Letter or A4, portrait.
+ *
+ * A poster is 190 x 250 mm, which fits inside the printable area of both Letter (196 x 259 mm)
+ * and A4 (190 x 277 mm) with 10 mm margins. Everything inside is sized in poster millimetres
+ * (--mm), so the screen preview is the printed page, scaled to fit.
+ */
+
+@page {
+  size: portrait;
+  margin: 10mm;
+}
+
+.poster-list {
+  display: grid;
+  justify-items: center;
+  gap: 2.5rem;
+  padding: 0 1rem;
+}
+
+.poster-figure {
+  width: min(190mm, 100%);
+  margin: 0;
+}
+
+.poster-sheet {
+  container-type: inline-size;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+}
+
+.poster-inner {
+  --mm: calc(100cqw / 190);
+  display: flex;
+  height: calc(var(--mm) * 250);
+  flex-direction: column;
+  gap: calc(var(--mm) * 6);
+  padding: calc(var(--mm) * 10);
+}
+
+/* The column's color from the board: lime for the lot, blue for the entrance. */
+.poster-sheet[data-kind="to-hotel"] {
+  --band: #dff25a;
+  --band-ink: #1a2208;
+}
+
+.poster-sheet[data-kind="from-hotel"] {
+  --band: #6ec8ff;
+  --band-ink: #041820;
+}
+
+.poster-sheet[data-kind="anywhere"] {
+  --band: #10140f;
+  --band-ink: #f4f1e6;
+}
+
+.poster-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--mm) * 4) calc(var(--mm) * 7);
+  border-radius: calc(var(--mm) * 5);
+  background: var(--band);
+  color: var(--band-ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.poster-brand {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: calc(var(--mm) * 11);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.poster-icon {
+  width: calc(var(--mm) * 11);
+  height: calc(var(--mm) * 11);
+}
+
+.poster-titles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--mm) * 5) calc(var(--mm) * 8);
+  padding: 0 calc(var(--mm) * 3);
+}
+
+.poster-title {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: calc(var(--mm) * 14);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+}
+
+.poster-detail {
+  margin-top: calc(var(--mm) * 1.5);
+  color: #333;
+  font-size: calc(var(--mm) * 4.6);
+  line-height: 1.2;
+}
+
+/* The code takes whatever height is left, up to 110 mm. */
+.poster-code {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.poster-qr {
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  max-height: calc(var(--mm) * 110);
+  aspect-ratio: 1;
+}
+
+.poster-scan {
+  display: grid;
+  gap: calc(var(--mm) * 1.2);
+  font-size: calc(var(--mm) * 6.2);
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.poster-foot {
+  display: grid;
+  gap: calc(var(--mm) * 1.5);
+  padding-top: calc(var(--mm) * 3.5);
+  border-top: calc(var(--mm) * 0.5) solid #111;
+  font-size: calc(var(--mm) * 4.4);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.poster-url {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.poster-phone-icon {
+  display: inline;
+  width: calc(var(--mm) * 4.4);
+  height: calc(var(--mm) * 4.4);
+  margin-right: calc(var(--mm) * 1.5);
+  vertical-align: -0.12em;
+}
+
+.poster-number {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000;
+  }
+
+  .poster-list {
+    display: block;
+    padding: 0;
+  }
+
+  .poster-figure {
+    width: 190mm;
+    margin: 0 auto;
+    break-inside: avoid;
+  }
+
+  .poster-sheet {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .poster-skip {
+    display: none;
+  }
+
+  .poster-break {
+    break-before: page;
+  }
+}
