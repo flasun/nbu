@@ -9,6 +9,8 @@ export type Prefs = {
   chime: boolean;
   awake: boolean;
   locate: boolean;
+  /** Big, simple screen with only the next bus for the chosen column. */
+  focus: boolean;
   /** Null until the rider picks one; the phone's language is used meanwhile. */
   lang: Lang | null;
 };
@@ -19,6 +21,7 @@ export const DEFAULT_PREFS: Prefs = {
   chime: false,
   awake: false,
   locate: false,
+  focus: false,
   lang: null,
 };
 
@@ -38,6 +41,7 @@ export function loadPrefs(): Prefs {
       chime: Boolean(parsed.chime),
       awake: Boolean(parsed.awake),
       locate: Boolean(parsed.locate),
+      focus: parsed.focus === true,
       lang: isLang(parsed.lang) ? parsed.lang : null,
     };
   } catch {

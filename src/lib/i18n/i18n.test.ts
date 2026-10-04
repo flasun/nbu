@@ -119,6 +119,10 @@ describe("every language", () => {
           "tools.chime": 18,
           "tools.chimeOn": 18,
           "tools.rearm": 18,
+          "focus.open": 14,
+          "focus.close": 14,
+          "focus.after": 10,
+          "focus.leftAgo": 18,
         };
         const t = MESSAGES[lang];
         const longestDate = Math.max(

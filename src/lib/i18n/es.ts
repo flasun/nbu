@@ -174,6 +174,13 @@ export const es: Messages = {
     noChime: "Este navegador no puede reproducir el aviso sonoro.",
   },
 
+  focus: {
+    open: "Ver en grande",
+    close: "Ver todo",
+    after: "Después",
+    leftAgo: (minutesAgo: number) => (minutesAgo <= 1 ? "Salió hace 1 min" : `Salió hace ${minutesAgo} min`),
+  },
+
   plan: {
     label: "Ver otra hora",
     inputLabel: "Hora de Orlando a simular",

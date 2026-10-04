@@ -7,6 +7,8 @@ import {
   Hotel,
   Lock,
   MapPin,
+  Maximize2,
+  Minimize2,
   Minus,
   Navigation,
   Phone,
@@ -183,6 +185,10 @@ export function ShuttleBoard() {
   const locateGen = useRef(0);
   const fixRef = useRef<Fix | null>(null);
   const hiddenAt = useRef<number | null>(null);
+  const focusOpenRef = useRef<HTMLButtonElement | null>(null);
+  const focusCloseRef = useRef<HTMLButtonElement | null>(null);
+  /** Set when the rider switches screens, so keyboard focus follows them (and not on load). */
+  const focusSwitched = useRef(false);
 
   const lang: Lang = prefs.lang ?? detectLang(phoneLanguages());
   const t = MESSAGES[lang];
@@ -381,6 +387,37 @@ export function ShuttleBoard() {
       (place === "at-lot" && direction === "from-hotel") ||
       (place === "away" && direction === "from-hotel") ||
       (place === "far" && direction === "from-hotel"));
+  const mismatchText = !mismatch
+    ? null
+    : place === "at-hotel"
+      ? t.mismatch.atHotel
+      : place === "at-lot"
+        ? t.mismatch.atLot
+        : t.mismatch.notAtHotel;
+  const showFocus = prefs.focus && board !== null && copy !== null && direction !== null;
+
+  useEffect(() => {
+    if (!focusSwitched.current) return;
+    focusSwitched.current = false;
+    if (showFocus) window.scrollTo(0, 0);
+    (showFocus ? focusCloseRef : focusOpenRef).current?.focus();
+  }, [showFocus]);
+
+  useEffect(() => {
+    if (!showFocus) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      focusSwitched.current = true;
+      setPrefs((prev) => ({ ...prev, focus: false }));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showFocus]);
+
+  function setFocusScreen(on: boolean) {
+    focusSwitched.current = true;
+    setPrefs((prev) => ({ ...prev, focus: on }));
+  }
 
   function choose(next: Direction) {
     setLinked(null);
@@ -451,6 +488,22 @@ export function ShuttleBoard() {
     requestAnimationFrame(() => {
       document.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.focus();
     });
+  }
+
+  if (showFocus && board && copy) {
+    return (
+      <FocusView
+        board={board}
+        copy={copy}
+        t={t}
+        atStop={atStop}
+        summary={summary}
+        warning={mismatchText}
+        plan={plan ? <PlanNote text={t.plan.checking(formatPlan(plan))} back={t.plan.back} onBack={() => setPlan("")} /> : null}
+        closeRef={focusCloseRef}
+        onClose={() => setFocusScreen(false)}
+      />
+    );
   }
 
   return (
@@ -526,28 +579,13 @@ export function ShuttleBoard() {
             {copy ? copy.column : t.switcher.hint}
           </p>
 
-          {mismatch ? (
-            <p className="mt-2 px-1 text-sm text-alert">
-              {place === "at-hotel"
-                ? t.mismatch.atHotel
-                : place === "at-lot"
-                  ? t.mismatch.atLot
-                  : t.mismatch.notAtHotel}
-            </p>
-          ) : null}
+          {mismatchText ? <p className="mt-2 px-1 text-sm text-alert">{mismatchText}</p> : null}
 
           <section className="mt-3 rounded-card border border-line bg-panel px-5 py-5" aria-live="off">
             {plan ? (
-              <p className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-panel-2 px-3 py-2 text-sm text-ivory">
-                <span>{t.plan.checking(formatPlan(plan))}</span>
-                <button
-                  type="button"
-                  onClick={() => setPlan("")}
-                  className={`min-h-11 rounded-full px-3 font-medium text-signal ${focusRing}`}
-                >
-                  {t.plan.back}
-                </button>
-              </p>
+              <div className="mb-4">
+                <PlanNote text={t.plan.checking(formatPlan(plan))} back={t.plan.back} onBack={() => setPlan("")} />
+              </div>
             ) : null}
 
             {!board || !copy || !direction ? (
@@ -564,6 +602,8 @@ export function ShuttleBoard() {
                 t={t}
                 atStop={atStop}
                 mapHref={directionsUrl(direction, mapApp)}
+                focusRef={focusOpenRef}
+                onFocus={() => setFocusScreen(true)}
               />
             )}
 
@@ -878,12 +918,16 @@ function Hero({
   t,
   atStop,
   mapHref,
+  focusRef,
+  onFocus,
 }: {
   board: BoardSnapshot;
   copy: Messages["directions"][Direction];
   t: Messages;
   atStop: boolean;
   mapHref: string;
+  focusRef: RefObject<HTMLButtonElement | null>;
+  onFocus: () => void;
 }) {
   const late = walkLine(board, atStop, t);
   const rideFrom = rideDeparture(board);
@@ -924,7 +968,19 @@ function Hero({
           {t.hero.map}
         </a>
       </p>
-      <p className="mt-5 text-sm text-mute">{countLabel}</p>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <p className="text-sm text-mute">{countLabel}</p>
+        <button
+          ref={focusRef}
+          type="button"
+          onClick={onFocus}
+          data-testid="focus-open"
+          className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-ivory ${focusRing}`}
+        >
+          <Maximize2 className="size-4" aria-hidden="true" />
+          {t.focus.open}
+        </button>
+      </div>
       <p
         data-testid="countdown"
         className={`font-display leading-none font-semibold tracking-wide tabular-nums ${
@@ -978,6 +1034,144 @@ function Hero({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** Only the next bus for one column, in type big enough to read at arm's length. */
+function FocusView({
+  board,
+  copy,
+  t,
+  atStop,
+  summary,
+  warning,
+  plan,
+  closeRef,
+  onClose,
+}: {
+  board: BoardSnapshot;
+  copy: Messages["directions"][Direction];
+  t: Messages;
+  atStop: boolean;
+  summary: string;
+  warning: string | null;
+  plan: ReactNode;
+  closeRef: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}) {
+  const late = walkLine(board, atStop, t);
+  const tone = columnTone(board.direction);
+  const Icon = board.direction === "to-hotel" ? Hotel : BusFront;
+  const hot = !board.next.boarding && board.next.waitSec < 60 && !board.inGap;
+  const countdown = board.next.boarding ? t.hero.now : formatCountdown(board.next.waitSec);
+  const countLabel = board.inGap ? t.hero.resumesIn : board.next.boarding ? t.hero.atStop : t.hero.leavesIn;
+  const last = board.last && !board.next.boarding && !board.inGap ? board.last : null;
+  const after = board.inGap ? null : (board.following[0] ?? null);
+
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-5 pt-5 pb-8" data-testid="focus-view">
+      <p className="sr-only" aria-live="polite">
+        {summary}
+      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p
+          className={`inline-flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 font-display text-2xl leading-none font-semibold tracking-wide ${tone.bg} ${tone.ink}`}
+        >
+          <Icon className="size-5 shrink-0" aria-hidden="true" />
+          {copy.title}
+        </p>
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          data-testid="focus-close"
+          className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-ivory ${focusRing}`}
+        >
+          <Minimize2 className="size-4" aria-hidden="true" />
+          {t.focus.close}
+        </button>
+      </div>
+      {warning ? <p className="mt-3 text-sm text-alert">{warning}</p> : null}
+      {plan ? <div className="mt-3">{plan}</div> : null}
+
+      <div className="flex flex-1 flex-col justify-center py-6">
+        <p
+          className={`font-display leading-none font-semibold tracking-wide text-ivory ${
+            board.inGap ? "text-[length:clamp(2.75rem,14vw,4.5rem)]" : "text-[length:clamp(3.5rem,19vw,6rem)]"
+          }`}
+        >
+          <span className="whitespace-nowrap">{board.inGap ? t.hero.gapHours : formatClock(board.next.minutes)}</span>
+          {board.next.tomorrow && !board.inGap ? (
+            <span className="mt-2 block font-sans text-base font-medium tracking-normal text-mute">
+              {t.hero.tomorrow}
+            </span>
+          ) : null}
+        </p>
+        <p className="mt-6 text-sm text-mute">{countLabel}</p>
+        <p
+          data-testid="countdown"
+          className={`font-display leading-none font-semibold tracking-wide tabular-nums ${
+            countdown.length > 5 ? "text-[length:clamp(3.5rem,18vw,6rem)]" : "text-[length:clamp(4rem,23vw,7rem)]"
+          } ${hot || board.next.boarding ? tone.text : "text-ivory"}`}
+        >
+          {countdown}
+        </p>
+        {board.progress !== null ? (
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-panel-2" aria-hidden="true">
+            <div
+              className={`h-full w-full origin-left ${tone.bg}`}
+              style={{ transform: `scaleX(${board.progress})` }}
+            />
+          </div>
+        ) : null}
+        {board.inGap ? <Callout kind="gap" resume={formatClock(board.next.minutes)} t={t} /> : null}
+        {board.lotCallout ? <Callout kind="lot" resume={formatClock(board.next.minutes)} t={t} /> : null}
+        {board.entranceStationed && !board.inGap ? (
+          <p className="mt-4 text-sm text-pretty text-ivory">{t.hero.stationedTitle}</p>
+        ) : null}
+        {board.inGap || board.lotCallout ? null : (
+          <p className={`mt-4 text-base ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
+        )}
+      </div>
+
+      {last || after ? (
+        <ul className="space-y-3 border-t border-line pt-4">
+          {last ? (
+            <li className="flex items-baseline justify-between gap-3 text-mute">
+              <span className="font-display text-3xl leading-none font-semibold tracking-wide tabular-nums">
+                {formatClock(last.minutes)}
+              </span>
+              <span className="text-right text-xs tracking-wide uppercase">
+                {t.focus.leftAgo(Math.round(last.agoSec / 60))}
+              </span>
+            </li>
+          ) : null}
+          {after ? (
+            <li className="flex items-baseline justify-between gap-3 text-ivory">
+              <span className="font-display text-3xl leading-none font-semibold tracking-wide tabular-nums">
+                {formatClock(after.minutes)}
+              </span>
+              <span className="text-right text-xs tracking-wide text-mute uppercase">{t.focus.after}</span>
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </main>
+  );
+}
+
+function PlanNote({ text, back, onBack }: { text: string; back: string; onBack: () => void }) {
+  return (
+    <p className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-panel-2 px-3 py-2 text-sm text-ivory">
+      <span>{text}</span>
+      <button
+        type="button"
+        onClick={onBack}
+        className={`min-h-11 rounded-full px-3 font-medium text-signal ${focusRing}`}
+      >
+        {back}
+      </button>
+    </p>
   );
 }
 

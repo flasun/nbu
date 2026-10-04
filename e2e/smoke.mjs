@@ -168,3 +168,69 @@ test("opens a shared ?lang= link in that language", async () => {
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test("opens the focus screen for the chosen column and remembers it", async () => {
+  // 7:22 AM in Orlando.
+  const { context, page, errors } = await open("", { iso: "2026-10-03T11:22:00Z" });
+  await page.getByTestId("direction-to").click();
+  await page.getByTestId("focus-open").click();
+  const focus = page.getByTestId("focus-view");
+  await focus.waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "focus-close");
+  assert.match(await focus.getByTestId("countdown").innerText(), /^0[78]:\d\d$/);
+  await assert.doesNotReject(focus.getByText("7:30 AM", { exact: true }).waitFor());
+  await assert.doesNotReject(focus.getByText("To hotel", { exact: true }).waitFor());
+  await assert.doesNotReject(focus.getByText("7:45 AM", { exact: true }).waitFor());
+  assert.equal(await page.getByTestId("direction-from").count(), 0, "only one column on the focus screen");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  assert.equal(overflow, false, "no sideways scrolling on a phone");
+
+  await page.reload({ waitUntil: "load" });
+  await assert.doesNotReject(page.getByTestId("focus-view").waitFor(), "focus screen sticks after a reload");
+
+  await page.keyboard.press("Escape");
+  await page.getByTestId("direction-to").waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "focus-open");
+  await page.getByTestId("focus-open").click();
+  await page.getByTestId("focus-close").click();
+  await page.getByTestId("direction-to").waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("focus screen keeps the overnight call button", async () => {
+  // 2:00 AM in Orlando.
+  const { context, page, errors } = await open("?dir=from", { iso: "2026-10-04T06:00:00Z" });
+  await page.getByTestId("focus-open").click();
+  const focus = page.getByTestId("focus-view");
+  await assert.doesNotReject(focus.getByText("1:30–3:00 AM").waitFor());
+  assert.equal(await focus.locator('a[href^="tel:"]').count(), 1);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("focus screen still warns when the locked column is for the other stop", async () => {
+  const context = await browser.newContext({
+    viewport: MOBILE,
+    timezoneId: "America/Los_Angeles",
+    geolocation: { latitude: 28.4009498, longitude: -81.5452239, accuracy: 20 },
+    permissions: ["geolocation"],
+  });
+  await context.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.abort());
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.goto(BASE, { waitUntil: "load" });
+  await page.getByRole("button", { name: "Use my location" }).click();
+  // At the hotel stop, the board follows to the entrance column...
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="direction-from"]')?.getAttribute("aria-checked") === "true",
+  );
+  // ...and locking the lot column there is the mistake the warning is for.
+  await page.getByTestId("direction-to").click();
+  await page.getByTestId("focus-open").click();
+  const warning = "You're at the hotel stop, but this column is locked to the parking lot.";
+  await assert.doesNotReject(page.getByTestId("focus-view").getByText(warning).waitFor());
+  assert.deepEqual(errors, []);
+  await context.close();
+});

@@ -176,6 +176,13 @@ export const pt: Messages = {
     noChime: "Este navegador não consegue tocar o aviso sonoro.",
   },
 
+  focus: {
+    open: "Ver grande",
+    close: "Ver tudo",
+    after: "Depois",
+    leftAgo: (minutesAgo: number) => (minutesAgo <= 1 ? "Saiu há 1 min" : `Saiu há ${minutesAgo} min`),
+  },
+
   plan: {
     label: "Ver outro horário",
     inputLabel: "Hora de Orlando para simular",
