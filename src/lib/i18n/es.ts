@@ -1,6 +1,6 @@
 import type { Messages } from "./en.ts";
 
-/** Spanish: neutral Latin American, informal "tú", for US Latino staff in Florida ("autobús", "estacionamiento", "despacho"); "la 1:15" vs "las 7:30" is picked from the time. */
+/** Spanish: neutral Latin American, informal "tú", for US Latino staff in Florida ("autobús", "bus" only in the 26-char from-hotel label, "estacionamiento", "despacho"); "la 1:15" vs "las 7:30" is picked from the time. */
 export const es: Messages = {
   languageName: "Español",
   languagePicker: "Idioma",
@@ -42,7 +42,7 @@ export const es: Messages = {
       standAt: "Espera en la entrada de empleados",
       leaves: "Sale de la entrada de empleados",
       column: "Esta es la columna de la entrada de empleados. La del estacionamiento está oculta.",
-      nextBus: "Próximo autobús del hotel",
+      nextBus: "Próximo bus desde el hotel",
       backAt: (time: string) => `Vuelve a ${time.startsWith("1:") ? "la" : "las"} ${time} · Entrada de empleados`,
       arrives: (time: string) => `Llegas al estacionamiento cerca de ${time.startsWith("1:") ? "la" : "las"} ${time}`,
       arrivesOn: (time: string, bus: string) =>
@@ -70,7 +70,7 @@ export const es: Messages = {
   },
 
   pickSide: {
-    title: "¿Hacia dónde vas?",
+    title: "¿Qué columna necesitas?",
     body: "Elige Al hotel si vas a tomar el autobús en el estacionamiento, o Del hotel si estás en la entrada de empleados en Dream Tree Blvd.",
   },
 
@@ -98,7 +98,7 @@ export const es: Messages = {
     boarding: "Ya está en la parada.",
     atStop: "Estás en la parada.",
     plenty: "Tienes tiempo de sobra antes de salir.",
-    zero: "El tiempo para llegar está en cero: cuentas desde la parada.",
+    zero: "El tiempo para llegar está en cero: es como si ya estuvieras en la parada.",
     tooLateCatch: (time: string) =>
       `Este ya no lo alcanzas. Puedes tomar el de ${time.startsWith("1:") ? "la" : "las"} ${time}.`,
     tooLate: "Este ya no lo alcanzas.",
@@ -157,7 +157,7 @@ export const es: Messages = {
     fromHotel: (distance: string) => `a ${distance} de la parada del hotel`,
   },
   placeButtons: {
-    followMe: "Sígueme",
+    followMe: "Seguir ubicación",
     tryAgain: "Reintentar",
     useLocation: "Usar ubicación",
     lock: "Fijar",
@@ -191,7 +191,7 @@ export const es: Messages = {
       "early-morning": "Madrugada",
       morning: "Mañana",
       afternoon: "Tarde",
-      evening: "Atardecer",
+      evening: "Tarde-noche",
       night: "Noche",
     },
     now: "Ahora",
