@@ -53,4 +53,15 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
+  build: {
+    rolldownOptions: {
+      // The board, plus the printable QR posters at /poster.
+      input: {
+        index: fileURLToPath(new URL("./index.html", import.meta.url)),
+        poster: fileURLToPath(new URL("./poster.html", import.meta.url)),
+      },
+      // React and the text both pages use, otherwise named after whichever file came first.
+      output: { chunkFileNames: "assets/shared-[hash].js" },
+    },
+  },
 });

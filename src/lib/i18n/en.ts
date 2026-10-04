@@ -293,6 +293,39 @@ export const en = {
     android: "In Chrome: menu, then Install app.",
   },
 
+  /** Printable QR posters at /poster, for whoever prints them and puts them up. */
+  poster: {
+    /** Page heading and browser tab title. */
+    title: "QR posters",
+    intro:
+      "Print them and put each one up where it says. A stop's code opens the board on that stop's column, for that visit only.",
+    /** Button that prints the posters that are ticked. Max 18. */
+    print: "Print",
+    /** Checkbox under each poster, ticked to begin with. Max 18. */
+    printThis: "Print this one",
+    /** Next to the print button. */
+    paper: "Letter or A4, portrait. Each poster prints on its own page.",
+    /** Warning when this page is open on an address that will change, e.g. "next-bus-up.example.workers.dev". */
+    temporary: (host: string) =>
+      `These codes open ${host}, a temporary address. Print them once the final address is set up, so they never need reprinting.`,
+    /** Under the print button. Shown on screen, never printed. */
+    check: "Once a poster is up, scan it right there. The board should open on the column printed on the poster.",
+    /** Where each poster goes. Shown on screen, never printed. */
+    putUp: {
+      "to-hotel": "Put this one up at the parking-lot pickup.",
+      "from-hotel": "Put this one up at the employee entrance.",
+      anywhere: "Put this one up on a notice board or by the time clock. It opens the board without choosing a column.",
+    },
+    /** Printed in big letters on the notice-board poster, in all four languages. Max 11. */
+    anywhereTitle: "Bus times",
+    /** Printed under anywhereTitle. Max 32. */
+    anywhereDetail: "Lot and employee entrance",
+    /** Printed under the code on every poster, in all four languages. Max 40. */
+    scan: "Scan for the next bus",
+    /** Screen-reader label for a code. */
+    codeLabel: (url: string) => `QR code that opens ${url}`,
+  },
+
   error: {
     title: "Something went wrong",
     unknown: "Unknown error",

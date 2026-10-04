@@ -229,6 +229,27 @@ export const ht: Messages = {
     android: "Nan Chrome: peze meni an, apre “Install app”.",
   },
 
+  poster: {
+    title: "Afich QR",
+    intro:
+      "Enprime yo, epi mete chak afich kote yo di l ale a. Kòd QR yon arè louvri tablo a sou kolòn arè sa a, pou fwa sa a sèlman.",
+    print: "Enprime",
+    printThis: "Enprime sa a",
+    paper: "Papye Letter oswa A4, vètikal (“Portrait”). Chak afich sou pwòp paj li.",
+    temporary: (host: string) =>
+      `Kòd sa yo louvri ${host}, yon adrès tanporè. Enprime yo lè adrès final la pare, konsa ou p ap bezwen enprime yo ankò.`,
+    check: "Lè afich la fin monte, eskane l la menm. Tablo a dwe louvri sou kolòn ki ekri sou afich la.",
+    putUp: {
+      "to-hotel": "Mete sa a nan arè bis la nan pakin nan.",
+      "from-hotel": "Mete sa a nan antre anplwaye yo.",
+      anywhere: "Mete sa a sou yon tablo afichaj oswa bò revèy pou ponche a. Li louvri tablo a san li pa chwazi yon kolòn.",
+    },
+    anywhereTitle: "Orè bis",
+    anywhereDetail: "Pakin nan ak antre anplwaye yo",
+    scan: "Eskane pou wè pwochen bis la",
+    codeLabel: (url: string) => `Kòd QR ki louvri ${url}`,
+  },
+
   error: {
     title: "Gen yon bagay ki pa mache",
     unknown: "Erè nou pa konnen",

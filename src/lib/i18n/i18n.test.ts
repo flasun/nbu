@@ -30,6 +30,8 @@ const SAMPLES: Record<string, unknown>[] = [
   distance: "120 ft",
   weekday: "Sat",
   month: "Oct",
+  host: "next-bus-up.example.workers.dev",
+  url: "https://next-bus-up.example.workers.dev/?dir=to",
 }));
 
 type Fn = (...args: unknown[]) => unknown;
@@ -123,6 +125,11 @@ describe("every language", () => {
           "focus.close": 14,
           "focus.after": 10,
           "focus.leftAgo": 18,
+          "poster.print": 18,
+          "poster.printThis": 18,
+          "poster.anywhereTitle": 11,
+          "poster.anywhereDetail": 32,
+          "poster.scan": 40,
         };
         const t = MESSAGES[lang];
         const longestDate = Math.max(
