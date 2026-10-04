@@ -14,11 +14,19 @@ export type PlaceState = Zone | "pending" | "denied" | "unsupported" | "idle" | 
 
 export type OrlandoNow = {
   seconds: number;
-  weekday: string;
-  dateLabel: string;
+  /** 0 = Sunday. */
+  weekday: number;
+  /** 1 = January. */
+  month: number;
+  day: number;
   clock: string;
   epochMs: number;
 };
+
+/** Time-of-day group for the full list of times. */
+export type DayPart = "after-midnight" | "early-morning" | "morning" | "afternoon" | "evening" | "night";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export type BusHit = {
   /** Minute of day the bus is printed for. */
@@ -55,8 +63,8 @@ export function readOrlando(date: Date): OrlandoNow {
     minute: "2-digit",
     second: "2-digit",
     hourCycle: "h23",
-    weekday: "long",
-    month: "short",
+    weekday: "short",
+    month: "numeric",
     day: "numeric",
   }).formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) =>
@@ -69,8 +77,9 @@ export function readOrlando(date: Date): OrlandoNow {
   const ap = hour >= 12 ? "PM" : "AM";
   return {
     seconds: hour * 3600 + minute * 60 + second,
-    weekday: get("weekday"),
-    dateLabel: `${get("month")} ${get("day")}`,
+    weekday: WEEKDAYS.indexOf(get("weekday")),
+    month: Number(get("month")),
+    day: Number(get("day")),
     clock: `${h12}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${ap}`,
     epochMs: date.getTime(),
   };
@@ -273,8 +282,8 @@ export function serviceRank(minutes: number): number {
   return minutes < GAP_END_MIN ? minutes + 1440 : minutes;
 }
 
-export function listLabel(minutes: number): string {
-  if (minutes < GAP_END_MIN) return "After midnight";
+export function listLabel(minutes: number): DayPart {
+  if (minutes < GAP_END_MIN) return "after-midnight";
   return daypart(minutes);
 }
 
@@ -392,10 +401,10 @@ export function rideDeparture(board: BoardSnapshot): number | null {
   return board.leaveInSec >= 0 ? board.next.minutes : board.catchMinutes;
 }
 
-export function daypart(minutes: number): string {
-  if (minutes < 5 * 60) return "Early morning";
-  if (minutes < 12 * 60) return "Morning";
-  if (minutes < 17 * 60) return "Afternoon";
-  if (minutes < 21 * 60) return "Evening";
-  return "Night";
+export function daypart(minutes: number): Exclude<DayPart, "after-midnight"> {
+  if (minutes < 5 * 60) return "early-morning";
+  if (minutes < 12 * 60) return "morning";
+  if (minutes < 17 * 60) return "afternoon";
+  if (minutes < 21 * 60) return "evening";
+  return "night";
 }

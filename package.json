@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test \"src/lib/shuttle/*.test.ts\"",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "e2e": "node e2e/smoke.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."

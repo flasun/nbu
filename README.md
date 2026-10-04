@@ -40,6 +40,20 @@ Everything lives in `src/lib/shuttle/schedule.ts`.
 The dispatch number, the feedback forms, the stop locations and the ride time (`RIDE_MIN`) are in the
 same file.
 
+## Languages
+
+The board speaks English, Spanish, Haitian Creole (Kreyòl) and Brazilian Portuguese. It follows the
+phone's language until the rider taps one at the top; that choice is saved. A link with `?lang=es`,
+`?lang=ht` or `?lang=pt` opens in that language, which is handy in group chats.
+
+All text lives in `src/lib/i18n/`. `en.ts` is the source, with notes on where each line appears and
+how long it may be. `es.ts`, `ht.ts` and `pt.ts` must match it exactly: TypeScript and `npm test` fail
+if a line is missing, left in English, too long, or drops a time. To change wording, edit `en.ts` and
+the same line in the other three files. Times stay in the sheet's "7:30 AM" format in every language.
+
+The Android home-screen shortcut names ("To hotel" / "From hotel") stay in English: the browser
+reads them from the manifest, which cannot follow the language a rider picks.
+
 ## QR codes and shortcuts
 
 - `/?dir=to` opens the parking-lot column ("To hotel").

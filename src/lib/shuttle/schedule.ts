@@ -149,25 +149,3 @@ export const DEPARTURES: Record<Direction, number[]> = {
   "to-hotel": uniqSorted(TO_HOTEL, "lot"),
   "from-hotel": uniqSorted(FROM_HOTEL, "entrance"),
 };
-
-export const DIRECTION_COPY: Record<
-  Direction,
-  { title: string; stop: string; leaves: string; column: string; arrives: string; directions: string }
-> = {
-  "to-hotel": {
-    title: "To hotel",
-    stop: "Parking lot",
-    leaves: "Leaves the parking lot",
-    column: "This is the parking-lot column. The entrance column is hidden.",
-    arrives: "Gets to the hotel",
-    directions: "Directions to the parking lot in your maps app",
-  },
-  "from-hotel": {
-    title: "From hotel",
-    stop: "Employee entrance",
-    leaves: "Leaves the employee entrance",
-    column: "This is the employee-entrance column. The lot column is hidden.",
-    arrives: "Gets to the lot",
-    directions: "Directions to the employee entrance in your maps app",
-  },
-};
