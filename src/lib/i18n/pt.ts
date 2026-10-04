@@ -177,7 +177,7 @@ export const pt: Messages = {
   },
 
   focus: {
-    open: "Ver grande",
+    open: "Ver maior",
     close: "Ver tudo",
     after: "Depois",
     leftAgo: (minutesAgo: number) => (minutesAgo <= 1 ? "Saiu há 1 min" : `Saiu há ${minutesAgo} min`),

@@ -166,7 +166,7 @@ export const ht: Messages = {
   },
 
   focus: {
-    open: "Gwo ekran",
+    open: "Fè l pi gwo",
     close: "Tout tablo a",
     after: "Apre sa",
     leftAgo: (minutesAgo: number) => `Pati sa gen ${minutesAgo <= 1 ? 1 : minutesAgo} min`,

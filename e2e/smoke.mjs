@@ -63,16 +63,25 @@ after(async () => {
 });
 
 /** Open the board at a fixed instant, with the phone set to another time zone on purpose. */
-async function open(path, { iso, viewport = MOBILE } = {}) {
+async function open(path, { iso, viewport = MOBILE, prefs } = {}) {
   const context = await browser.newContext({ viewport, timezoneId: "America/Los_Angeles" });
   await context.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.abort());
+  // Settings saved on an earlier visit. Only on the first load, so a reload keeps what the page saved.
+  if (prefs) {
+    await context.addInitScript((saved) => {
+      if (!sessionStorage.getItem("seeded")) {
+        sessionStorage.setItem("seeded", "1");
+        localStorage.setItem("bus-up-v1", JSON.stringify(saved));
+      }
+    }, prefs);
+  }
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
   page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
   if (iso) await page.clock.install({ time: new Date(iso) });
   await page.goto(BASE + path, { waitUntil: "load" });
-  await page.locator('[data-testid="clock"]').waitFor();
+  await page.locator('[data-testid="clock"], [data-testid="focus-view"], [data-testid="focus-pick"]').first().waitFor();
   if (iso) await page.clock.runFor(1500);
   return { context, page, errors };
 }
@@ -231,6 +240,53 @@ test("focus screen still warns when the locked column is for the other stop", as
   await page.getByTestId("focus-open").click();
   const warning = "You're at the hotel stop, but this column is locked to the parking lot.";
   await assert.doesNotReject(page.getByTestId("focus-view").getByText(warning).waitFor());
+  // One tap from the warning puts the column back on location.
+  await page.getByRole("button", { name: "Follow me" }).click();
+  await assert.doesNotReject(page.getByTestId("focus-view").getByText("From hotel", { exact: true }).waitFor());
+  assert.equal(await page.getByText(warning).count(), 0);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("asks for a column on the focus screen when none is picked yet", async () => {
+  const { context, page, errors } = await open("", {
+    iso: "2026-10-03T11:22:00Z",
+    prefs: { mode: "auto", walkMin: 3, chime: false, awake: false, locate: false, focus: true, lang: null },
+  });
+  await page.getByTestId("focus-pick").waitFor();
+  assert.equal(await page.locator('[data-testid="clock"]').count(), 0, "not the full board");
+  await page.getByTestId("direction-to").click();
+  await page.getByTestId("focus-view").waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "focus-close");
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("shows Tap to re-arm on the focus screen after a reload with the chime on", async () => {
+  const { context, page, errors } = await open("", {
+    iso: "2026-10-03T11:22:00Z",
+    prefs: { mode: "to-hotel", walkMin: 3, chime: true, awake: false, locate: false, focus: true, lang: null },
+  });
+  const focus = page.getByTestId("focus-view");
+  await focus.waitFor();
+  await assert.doesNotReject(focus.getByRole("button", { name: "Tap to re-arm" }).waitFor());
+  await assert.doesNotReject(focus.getByRole("button", { name: "Keep screen on" }).waitFor());
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("keeps the times list on the next bus after leaving the focus screen", async () => {
+  // 6:22 PM in Orlando: the next bus is far down the list.
+  const { context, page, errors } = await open("?dir=to", {
+    iso: "2026-10-03T22:22:00Z",
+    viewport: { width: 1280, height: 800 },
+  });
+  const scrolled = () => page.locator("details ul").first().evaluate((list) => list.scrollTop);
+  assert.ok((await scrolled()) > 0, "the list starts on the next bus");
+  await page.getByTestId("focus-open").click();
+  await page.getByTestId("focus-close").click();
+  await page.getByTestId("direction-to").waitFor();
+  assert.ok((await scrolled()) > 0, "and is back on it after the focus screen");
   assert.deepEqual(errors, []);
   await context.close();
 });
