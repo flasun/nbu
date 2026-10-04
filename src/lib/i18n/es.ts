@@ -29,7 +29,7 @@ export const es: Messages = {
         `Llegas al hotel cerca de ${time.startsWith("1:") ? "la" : "las"} ${time} si tomas el de ${bus.startsWith("1:") ? "la" : "las"} ${bus}`,
       mapLabel: "Cómo llegar al estacionamiento en tu app de mapas",
       summaryNext: (time: string, minutes: number) =>
-        `Próximo autobús a ${time.startsWith("1:") ? "la" : "las"} ${time} desde el estacionamiento, en unos ${minutes} ${minutes === 1 ? "minuto" : "minutos"}.`,
+        `Próximo autobús a ${time.startsWith("1:") ? "la" : "las"} ${time} desde el estacionamiento, ${minutes === 1 ? "en 1 minuto" : `en unos ${minutes} minutos`}.`,
       summaryBoarding: (time: string) =>
         `El autobús de ${time.startsWith("1:") ? "la" : "las"} ${time} ya está saliendo del estacionamiento.`,
       summaryGap: (time: string) =>
@@ -49,7 +49,7 @@ export const es: Messages = {
         `Llegas al estacionamiento cerca de ${time.startsWith("1:") ? "la" : "las"} ${time} si tomas el de ${bus.startsWith("1:") ? "la" : "las"} ${bus}`,
       mapLabel: "Cómo llegar a la entrada de empleados en tu app de mapas",
       summaryNext: (time: string, minutes: number) =>
-        `Próximo autobús a ${time.startsWith("1:") ? "la" : "las"} ${time} desde la entrada de empleados, en unos ${minutes} ${minutes === 1 ? "minuto" : "minutos"}.`,
+        `Próximo autobús a ${time.startsWith("1:") ? "la" : "las"} ${time} desde la entrada de empleados, ${minutes === 1 ? "en 1 minuto" : `en unos ${minutes} minutos`}.`,
       summaryBoarding: (time: string) =>
         `El autobús de ${time.startsWith("1:") ? "la" : "las"} ${time} ya está saliendo de la entrada de empleados.`,
       summaryGap: (time: string) =>

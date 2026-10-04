@@ -58,6 +58,7 @@ import {
   MESSAGES,
   detectLang,
   langFromSearch,
+  phoneLanguages,
   type Lang,
   type Messages,
 } from "@/lib/i18n";
@@ -92,10 +93,6 @@ function initialPrefs(): Prefs {
   const prefs = loadPrefs();
   const fromLink = langFromSearch(window.location.search);
   return fromLink ? { ...prefs, lang: fromLink } : prefs;
-}
-
-function phoneLanguages(): readonly string[] {
-  return navigator.languages?.length ? navigator.languages : [navigator.language ?? "en"];
 }
 
 function isAppleDevice(): boolean {
@@ -170,7 +167,9 @@ export function ShuttleBoard() {
   const [chimeArmed, setChimeArmed] = useState(false);
   const [locateNonce, setLocateNonce] = useState(0);
   const [mapApp] = useState<MapApp>(() => (isAppleDevice() ? "apple" : "google"));
-  const [timesOpen, setTimesOpen] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
+  const [timesOpen, setTimesOpen] = useState(
+    () => window.matchMedia?.("(min-width: 1024px)")?.matches === true,
+  );
   /** Column from a stop's QR code or a shortcut. Lasts for this visit and is never saved. */
   const [linked, setLinked] = useState<Direction | null>(() =>
     directionFromSearch(window.location.search),
@@ -295,7 +294,14 @@ export function ShuttleBoard() {
     let cancelled = false;
     const acquire = async () => {
       try {
-        wakeLock.current = await navigator.wakeLock.request("screen");
+        const sentinel = await navigator.wakeLock.request("screen");
+        // Turned off (or unmounted) while the request was pending: let it go at once.
+        if (cancelled) {
+          void sentinel.release();
+          return;
+        }
+        void wakeLock.current?.release();
+        wakeLock.current = sentinel;
         setWakeNote(null);
       } catch {
         if (!cancelled) setWakeNote("noWakeLock");

@@ -1,13 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { MESSAGES, detectLang } from "@/lib/i18n";
-import { loadPrefs } from "@/lib/prefs";
+import { HTML_LANG, MESSAGES } from "@/lib/i18n";
+import { startLang } from "@/lib/prefs";
 
 type State = { error: Error | null };
 
-function messages() {
-  const lang = loadPrefs().lang ?? detectLang(navigator.languages ?? [navigator.language ?? "en"]);
-  return MESSAGES[lang];
-}
 
 /** Shows what broke instead of a blank screen, with a way to try again. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
@@ -19,12 +15,14 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(error, info.componentStack);
+    // The board may have crashed before setting the page language itself.
+    document.documentElement.lang = HTML_LANG[startLang()];
   }
 
   render() {
     const { error } = this.state;
     if (!error) return this.props.children;
-    const t = messages().error;
+    const t = MESSAGES[startLang()].error;
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-3 px-4">
         <h1 className="font-display text-3xl leading-none font-semibold tracking-wide text-ivory">

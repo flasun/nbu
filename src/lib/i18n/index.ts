@@ -21,16 +21,21 @@ export function isLang(value: unknown): value is Lang {
 
 /**
  * First supported language in the phone's list. Phones rarely offer Kreyòl, so a Haiti region
- * tag (for example fr-HT) picks it too.
+ * on an unsupported language (for example fr-HT) picks it too; en-HT stays English.
  */
 export function detectLang(tags: readonly string[]): Lang {
   for (const tag of tags) {
     const lower = tag.toLowerCase();
-    if (lower.endsWith("-ht")) return "ht";
     const base = lower.split("-")[0];
     if (isLang(base)) return base;
+    if (lower.endsWith("-ht")) return "ht";
   }
   return "en";
+}
+
+/** The phone's language list, or its single language on browsers without the list. */
+export function phoneLanguages(): readonly string[] {
+  return navigator.languages?.length ? navigator.languages : [navigator.language ?? "en"];
 }
 
 /** `?lang=es`, `?lang=ht`, `?lang=pt` or `?lang=en`, for links shared in group chats. */

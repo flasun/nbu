@@ -51,6 +51,9 @@ how long it may be. `es.ts`, `ht.ts` and `pt.ts` must match it exactly: TypeScri
 if a line is missing, left in English, too long, or drops a time. To change wording, edit `en.ts` and
 the same line in the other three files. Times stay in the sheet's "7:30 AM" format in every language.
 
+The Android home-screen shortcut names ("To hotel" / "From hotel") stay in English: the browser
+reads them from the manifest, which cannot follow the language a rider picks.
+
 ## QR codes and shortcuts
 
 - `/?dir=to` opens the parking-lot column ("To hotel").

@@ -1,4 +1,4 @@
-import { isLang, type Lang } from "@/lib/i18n";
+import { detectLang, isLang, langFromSearch, phoneLanguages, type Lang } from "@/lib/i18n";
 import type { Mode } from "@/lib/shuttle/logic";
 
 export const PREFS_KEY = "bus-up-v1";
@@ -51,4 +51,9 @@ export function savePrefs(prefs: Prefs): void {
   } catch {
     // Private mode or full storage: settings just won't stick.
   }
+}
+
+/** Language at startup: a ?lang= link, then the saved choice, then the phone's language. */
+export function startLang(): Lang {
+  return langFromSearch(window.location.search) ?? loadPrefs().lang ?? detectLang(phoneLanguages());
 }

@@ -13,67 +13,87 @@ function leaves(node: unknown, path = ""): Leaf[] {
   return [{ path, value: node }];
 }
 
-/** Sample arguments for every message function, by parameter name. */
-const SAMPLE: Record<string, unknown> = {
-  time: "7:30 AM",
-  bus: "7:45 AM",
-  minutes: 4,
-  minutesAgo: 3,
-  rideMin: 7,
+/**
+ * Argument sets for every message function, by parameter name. Several sets so that branches
+ * (singular, "la 1:10" vs "las 7:30", after midnight) are all exercised.
+ */
+const SAMPLES: Record<string, unknown>[] = [
+  { time: "7:30 AM", bus: "7:45 AM", minutes: 4, minutesAgo: 3, rideMin: 9, day: 3 },
+  { time: "1:10 AM", bus: "1:25 AM", minutes: 1, minutesAgo: 1, rideMin: 7, day: 28 },
+  { time: "12:15 AM", bus: "12:30 AM", minutes: 12, minutesAgo: 12, rideMin: 11, day: 14 },
+  { time: "11:50 PM", bus: "3:00 AM", minutes: 2, minutesAgo: 2, rideMin: 8, day: 1 },
+].map((set) => ({
+  ...set,
   date: "4.28.26",
   phone: "407.313.6990",
   where: "120 ft from the lot pickup",
   distance: "120 ft",
   weekday: "Sat",
   month: "Oct",
-  day: 3,
-};
+}));
 
-function call(fn: (...args: never[]) => unknown): string {
-  const names = /^\(([^)]*)\)/.exec(fn.toString())?.[1].split(",").map((name) => name.trim()) ?? [];
-  const args = names.map((name) => {
-    assert.ok(name in SAMPLE, `no sample value for parameter "${name}"`);
-    return SAMPLE[name];
-  });
-  return String((fn as (...args: unknown[]) => unknown)(...args));
+type Fn = (...args: unknown[]) => unknown;
+
+function params(fn: Fn): string[] {
+  const list = /^\(([^)]*)\)/.exec(fn.toString())?.[1] ?? "";
+  return list.split(",").map((name) => name.trim()).filter(Boolean);
 }
 
-/** Rendered text of every message, with functions called on sample values. */
-function rendered(lang: Lang): Map<string, string> {
-  const out = new Map<string, string>();
+/** Rendered text of every message for one argument set, with the arguments each function got. */
+function rendered(lang: Lang, set: Record<string, unknown>): Map<string, { text: string; args: Record<string, unknown> }> {
+  const out = new Map<string, { text: string; args: Record<string, unknown> }>();
   for (const { path, value } of leaves(MESSAGES[lang])) {
-    out.set(path, typeof value === "function" ? call(value as (...args: never[]) => unknown) : String(value));
+    if (typeof value !== "function") {
+      out.set(path, { text: String(value), args: {} });
+      continue;
+    }
+    const names = params(value as Fn);
+    const args = Object.fromEntries(
+      names.map((name) => {
+        assert.ok(name in set, `no sample value for parameter "${name}" (${path})`);
+        return [name, set[name]];
+      }),
+    );
+    out.set(path, { text: String((value as Fn)(...names.map((name) => set[name]))), args });
   }
   return out;
 }
 
 const englishShape = leaves(en).map((leaf) => `${leaf.path}:${typeof leaf.value}`);
 
+/** Lines that may read the same as English in a given language: names, printed times. */
+const SAME_AS_ENGLISH: Record<Lang, string[]> = {
+  en: [],
+  es: ["header.orlando", "hero.gapHours"],
+  ht: ["header.orlando", "hero.gapHours", "contact.dispatch"],
+  pt: ["header.orlando", "hero.gapHours"],
+};
+
 describe("every language", () => {
   for (const lang of LANGS) {
     describe(lang, () => {
-      const text = rendered(lang);
-
       it("has exactly the English set of messages", () => {
         const shape = leaves(MESSAGES[lang]).map((leaf) => `${leaf.path}:${typeof leaf.value}`);
         assert.deepEqual(shape, englishShape);
       });
 
       it("has no empty text", () => {
-        for (const [path, value] of text) assert.ok(value.trim().length > 0, `${lang} ${path} is empty`);
+        for (const set of SAMPLES) {
+          for (const [path, { text }] of rendered(lang, set)) assert.ok(text.trim(), `${lang} ${path} is empty`);
+        }
       });
 
-      it("keeps times, numbers and the phone number exactly as given", () => {
-        for (const [path, value] of text) {
-          if (path.endsWith("callout.call")) assert.ok(value.includes("407.313.6990"), `${lang} ${path}`);
-          if (path.endsWith("sheetDate")) assert.ok(value.includes("4.28.26"), `${lang} ${path}`);
+      it("keeps every value it is given: times, numbers, places, the phone number", () => {
+        for (const set of SAMPLES) {
+          for (const [path, { text, args }] of rendered(lang, set)) {
+            for (const [name, value] of Object.entries(args)) {
+              // "Last one left 1 min ago" covers 0 and 1 the same way.
+              const expected = name === "minutesAgo" && Number(value) <= 1 ? "1" : String(value);
+              assert.ok(text.includes(expected), `${lang} ${path} drops ${name}=${expected}: "${text}"`);
+            }
+          }
         }
-        const withTime = leaves(MESSAGES[lang])
-          .filter((leaf) => typeof leaf.value === "function" && /\btime\b/.test(String(leaf.value).split("=>")[0]))
-          .map((leaf) => leaf.path);
-        for (const path of withTime) assert.ok(text.get(path)!.includes("7:30 AM"), `${lang} ${path} drops the time`);
-        assert.ok(text.get("hero.gapHours")!.includes("1:30") && text.get("hero.gapHours")!.includes("3:00"));
-        assert.ok(text.get("hero.rideNote")!.includes("4"), `${lang} hero.rideNote drops the minutes`);
+        assert.ok(MESSAGES[lang].hero.gapHours.includes("1:30") && MESSAGES[lang].hero.gapHours.includes("3:00"));
       });
 
       it("fits the tight spots in the layout", () => {
@@ -100,8 +120,15 @@ describe("every language", () => {
           "tools.chimeOn": 18,
           "tools.rearm": 18,
         };
+        const t = MESSAGES[lang];
+        const longestDate = Math.max(
+          ...t.header.weekdaysShort.flatMap((weekday) => t.header.monthsShort.map((month) => t.header.date(weekday, month, 28).length)),
+        );
+        assert.ok(longestDate <= limits["header.date"], `${lang} header.date can reach ${longestDate} characters`);
+        const text = rendered(lang, SAMPLES[0]);
         for (const [path, max] of Object.entries(limits)) {
-          const value = text.get(path)!;
+          if (path === "header.date") continue;
+          const value = text.get(path)!.text;
           assert.ok(value.length <= max, `${lang} ${path} is ${value.length} characters (max ${max}): "${value}"`);
         }
       });
@@ -112,13 +139,15 @@ describe("every language", () => {
       });
 
       if (lang !== "en") {
-        it("is actually translated", () => {
-          const english = rendered("en");
-          // Names, times and numbers may stay the same; almost nothing else should.
-          const same = [...text].filter(([path, value]) => value === english.get(path)).map(([path]) => path);
-          const allowed = new Set(["hero.gapHours", "header.monthsShort[]"]);
-          const unexpected = same.filter((path) => !allowed.has(path.replace(/\[\d+\]/, "[]")));
-          assert.ok(unexpected.length <= 3, `${lang} still matches English at: ${unexpected.join(", ")}`);
+        it("is actually translated, in every branch", () => {
+          const allowed = new Set(SAME_AS_ENGLISH[lang]);
+          for (const set of SAMPLES) {
+            const english = rendered("en", set);
+            for (const [path, { text }] of rendered(lang, set)) {
+              if (allowed.has(path) || path.startsWith("header.monthsShort")) continue;
+              assert.notEqual(text, english.get(path)!.text, `${lang} ${path} is still English: "${text}"`);
+            }
+          }
         });
       }
     });
@@ -131,6 +160,8 @@ describe("picking a language", () => {
     assert.equal(detectLang(["pt-BR"]), "pt");
     assert.equal(detectLang(["ht"]), "ht");
     assert.equal(detectLang(["fr-HT", "en"]), "ht");
+    assert.equal(detectLang(["en-HT"]), "en");
+    assert.equal(detectLang(["es-HT", "fr"]), "es");
     assert.equal(detectLang(["fr-FR", "en-US"]), "en");
     assert.equal(detectLang(["de-DE"]), "en");
     assert.equal(detectLang([]), "en");
