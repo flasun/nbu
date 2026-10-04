@@ -221,6 +221,18 @@ export const en = {
     noChime: "This browser won't play a chime.",
   },
 
+  /** The focus screen: only the next bus for the chosen column, in big type. */
+  focus: {
+    /** Button next to "Leaves in" that opens the focus screen. Max 14. */
+    open: "Focus",
+    /** Button on the focus screen that goes back to the full board. Max 14. */
+    close: "Full board",
+    /** Small uppercase tag next to the departure after the next one. Max 10. */
+    after: "After",
+    /** Small uppercase tag next to the bus that just left. Max 18. */
+    leftAgo: (minutesAgo: number) => (minutesAgo <= 1 ? "Left 1 min ago" : `Left ${minutesAgo} min ago`),
+  },
+
   plan: {
     label: "Check a different time",
     /** Screen-reader label for the time input. */

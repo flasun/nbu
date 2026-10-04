@@ -165,6 +165,13 @@ export const ht: Messages = {
     noChime: "Navigatè sa a p ap fè son alèt la.",
   },
 
+  focus: {
+    open: "Fè l pi gwo",
+    close: "Tout tablo a",
+    after: "Apre sa",
+    leftAgo: (minutesAgo: number) => `Pati sa gen ${minutesAgo <= 1 ? 1 : minutesAgo} min`,
+  },
+
   plan: {
     label: "Gade yon lòt lè",
     inputLabel: "Fè kòmsi lè Orlando a se",
