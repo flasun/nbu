@@ -233,6 +233,27 @@ export const es: Messages = {
     android: "En Chrome: menú y luego Instalar app.",
   },
 
+  poster: {
+    title: "Carteles QR",
+    intro:
+      "Imprímelos y pon cada uno donde dice. El código de una parada abre la app en la columna de esa parada, solo durante esa visita.",
+    print: "Imprimir",
+    printThis: "Imprimir este",
+    paper: "Carta o A4, vertical. Cada cartel sale en su propia hoja.",
+    temporary: (host: string) =>
+      `Estos códigos abren ${host}, una dirección temporal. Imprímelos cuando la dirección final esté lista, para no tener que imprimirlos de nuevo.`,
+    check: "Cuando el cartel esté puesto, escanéalo ahí mismo. La app debe abrir en la columna que dice el cartel.",
+    putUp: {
+      "to-hotel": "Pon este en la parada del estacionamiento.",
+      "from-hotel": "Pon este en la entrada de empleados.",
+      anywhere: "Pon este en un tablero de anuncios o junto al reloj de marcar. Su código abre la app sin elegir una columna.",
+    },
+    anywhereTitle: "Horarios",
+    anywhereDetail: "Autobús al hotel y del hotel",
+    scan: "Escanea para ver el próximo autobús",
+    codeLabel: (url: string) => `Código QR que abre ${url}`,
+  },
+
   error: {
     title: "Algo salió mal",
     unknown: "Error desconocido",
