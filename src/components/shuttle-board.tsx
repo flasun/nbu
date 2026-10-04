@@ -52,6 +52,7 @@ type Prefs = {
   chime: boolean;
   awake: boolean;
   locate: boolean;
+  focus: boolean;
 };
 
 type Fix = {
@@ -67,6 +68,7 @@ const DEFAULT_PREFS: Prefs = {
   chime: false,
   awake: false,
   locate: false,
+  focus: false,
 };
 
 const focusRing =
@@ -88,6 +90,7 @@ function loadPrefs(): Prefs {
       chime: Boolean(parsed.chime),
       awake: Boolean(parsed.awake),
       locate: Boolean(parsed.locate),
+      focus: parsed.focus === true,
     };
   } catch {
     return DEFAULT_PREFS;
@@ -195,6 +198,100 @@ function placeTitle(place: PlaceState): string {
     default:
       return "Location unavailable";
   }
+}
+
+function FocusView({
+  board,
+  copy,
+  summary,
+  onBoard,
+}: {
+  board: BoardSnapshot;
+  copy: (typeof DIRECTION_COPY)[Direction];
+  summary: string;
+  onBoard: () => void;
+}) {
+  const late = walkLine(board);
+  const tone = columnTone(board.direction);
+  const hot = !board.next.boarding && board.next.waitSec < 60 && !board.inGap;
+  const countdown = board.next.boarding ? "NOW" : formatCountdown(board.next.waitSec);
+  const after = board.following[0];
+  const showLast = Boolean(board.last && !board.next.boarding && !board.inGap);
+  const showAfter = Boolean(after && !board.inGap);
+
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-5 pt-6 pb-8">
+      <p className="sr-only" aria-live="polite">
+        {summary}
+      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className={`text-sm font-medium tracking-wide uppercase ${tone.text}`}>{copy.title}</p>
+        <button
+          type="button"
+          onClick={onBoard}
+          className={`min-h-11 rounded-full border border-line px-3 text-sm text-ivory ${focusRing}`}
+        >
+          Board
+        </button>
+      </div>
+      <div className="flex flex-1 flex-col justify-center">
+        <p className="font-display text-7xl leading-none font-semibold tracking-wide text-ivory">
+          {board.inGap ? "1:30–3:00 AM" : formatClock(board.next.minutes)}
+          {board.next.tomorrow && !board.inGap ? (
+            <span className="ml-2 align-middle font-sans text-base font-medium tracking-normal text-mute normal-case">
+              tomorrow
+            </span>
+          ) : null}
+        </p>
+        <p className="mt-4 text-sm text-mute">
+          {board.inGap ? "Service resumes in" : board.next.boarding ? "At the stop" : "Leaves in"}
+        </p>
+        <p
+          data-testid="countdown"
+          className={`font-display text-6xl leading-none font-semibold tracking-wide tabular-nums ${
+            hot || board.next.boarding ? tone.text : "text-ivory"
+          }`}
+        >
+          {countdown}
+        </p>
+        {board.inGap ? null : (
+          <p className={`mt-4 text-sm ${late.late ? "text-alert" : "text-ivory"}`}>{late.text}</p>
+        )}
+        {board.lotCallout ? (
+          <p className="mt-3 text-sm text-ivory">
+            The shuttle should be waiting at the resort employee entrance.
+          </p>
+        ) : null}
+        {board.entranceStationed && !board.inGap ? (
+          <p className="mt-3 text-sm text-ivory">
+            The lot has no bus until 3:00 AM. This one still leaves from the entrance.
+          </p>
+        ) : null}
+      </div>
+      {showLast || showAfter ? (
+        <ul className="space-y-3 border-t border-line pt-4">
+          {showLast && board.last ? (
+            <li className="flex items-baseline justify-between gap-3 text-mute">
+              <span className="font-display text-3xl leading-none font-semibold tracking-wide tabular-nums">
+                {formatClock(board.last.minutes)}
+              </span>
+              <span className="text-xs tracking-wide uppercase">
+                Left · {agoLabel(board.last.agoSec)}
+              </span>
+            </li>
+          ) : null}
+          {showAfter && after ? (
+            <li className="flex items-baseline justify-between gap-3 text-ivory">
+              <span className="font-display text-3xl leading-none font-semibold tracking-wide tabular-nums">
+                {formatClock(after.minutes)}
+              </span>
+              <span className="text-xs tracking-wide text-mute uppercase">After</span>
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </main>
+  );
 }
 
 export function ShuttleBoard() {
@@ -417,6 +514,17 @@ export function ShuttleBoard() {
     });
   }
 
+  if (prefs.focus && board && copy && direction) {
+    return (
+      <FocusView
+        board={board}
+        copy={copy}
+        summary={summary}
+        onBoard={() => setPrefs((prev) => ({ ...prev, focus: false }))}
+      />
+    );
+  }
+
   return (
     <main className="mx-auto min-h-dvh w-full max-w-5xl px-4 pt-5 pb-12 md:px-8 md:pt-8">
       <p className="sr-only" aria-live="polite">
@@ -430,6 +538,14 @@ export function ShuttleBoard() {
           </h1>
           <p className="mt-1 text-sm text-mute">Dream Tree edition</p>
         </div>
+        <button
+          type="button"
+          disabled={!board}
+          onClick={() => setPrefs((prev) => ({ ...prev, focus: true }))}
+          className={`min-h-11 shrink-0 rounded-full border border-line px-3 text-sm text-ivory disabled:opacity-40 ${focusRing}`}
+        >
+          Focus
+        </button>
       </header>
 
       <section className="mb-4 rounded-card border border-line bg-panel px-5 py-4">
