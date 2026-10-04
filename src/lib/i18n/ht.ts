@@ -130,6 +130,9 @@ export const ht: Messages = {
   placeDetail: {
     locked: (where: string) => `Kolòn bloke · ${where}`,
     lockedNoPin: "Kolòn bloke · pa sèvi ak pozisyon w",
+    fromLink: (where: string) => `Dapre kòd QR arè a · ${where}`,
+    fromLinkNoPin: "Dapre kòd QR arè a · pou vizit sa a sèlman",
+    ago: (where: string, minutes: number) => `${where} · sa gen ${minutes} min`,
     pending: "N ap chèche arè otèl la ak arè pakin nan",
     entranceColumn: (where: string) => `${where} · kolòn antre a`,
     lotColumn: (where: string) => `${where} · kolòn pakin nan`,
@@ -149,6 +152,7 @@ export const ht: Messages = {
     tryAgain: "Eseye ankò",
     useLocation: "Jwenn kote m ye",
     lock: "Bloke",
+    stopLocation: "Sispann sèvi ak lokalizasyon",
   },
 
   tools: {

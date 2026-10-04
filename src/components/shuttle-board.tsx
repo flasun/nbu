@@ -72,10 +72,14 @@ type Fix = {
   accuracyM: number;
 };
 
-/** A reading older than this no longer counts for "you're at the stop". */
+/** A reading younger than this counts as where you are now. */
 const FIX_FRESH_MS = 3 * 60_000;
+/** While re-reads fail, the last place still picks the column for this long, labelled with its age. */
+const FIX_KEEP_MS = 30 * 60_000;
 /** Re-read location this often while the page is on screen. */
 const RELOCATE_MS = 60_000;
+/** A QR column lasts for the visit: until the page has been away this long. */
+const VISIT_GAP_MS = 30 * 60_000;
 const ZONES: readonly PlaceState[] = ["at-hotel", "at-lot", "away", "fuzzy", "far"];
 
 const focusRing =
@@ -178,6 +182,8 @@ export function ShuttleBoard() {
   const chimeDirection = useRef<Direction | null>(null);
   const wakeLock = useRef<WakeLockSentinel | null>(null);
   const locateGen = useRef(0);
+  const fixRef = useRef<Fix | null>(null);
+  const hiddenAt = useRef<number | null>(null);
 
   const lang: Lang = prefs.lang ?? detectLang(phoneLanguages());
   const t = MESSAGES[lang];
@@ -197,6 +203,20 @@ export function ShuttleBoard() {
   }, [lang]);
 
   useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt.current = Date.now();
+        return;
+      }
+      // Back after a long time away: that was another visit, so drop a QR column.
+      if (hiddenAt.current !== null && Date.now() - hiddenAt.current > VISIT_GAP_MS) setLinked(null);
+      hiddenAt.current = null;
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  useEffect(() => {
     savePrefs(prefs);
   }, [prefs]);
 
@@ -208,6 +228,7 @@ export function ShuttleBoard() {
   useEffect(() => {
     if (!prefs.locate) {
       locateGen.current += 1;
+      fixRef.current = null;
       setPlace("idle");
       setFix(null);
       return;
@@ -218,6 +239,12 @@ export function ShuttleBoard() {
       setPlace("unsupported");
       return;
     }
+    // After a "no", stop asking until the rider taps Try again or Follow me.
+    let paused = false;
+    const keep = (next: Fix | null) => {
+      fixRef.current = next;
+      setFix(next);
+    };
     const ask = () => {
       const gen = ++locateGen.current;
       setPlace((prev) => (prev === "idle" ? "pending" : prev));
@@ -228,26 +255,27 @@ export function ShuttleBoard() {
           const lotM = haversineMeters(pos.coords.latitude, pos.coords.longitude, LOT.lat, LOT.lon);
           const accuracyM = pos.coords.accuracy;
           const zone = zoneFor(hotelM, lotM, accuracyM);
-          setFix({ at: pos.timestamp, zone, hotelM, lotM, accuracyM });
+          const prev = fixRef.current;
+          // One rough background reading doesn't undo a recent clear one.
+          if (zone === "fuzzy" && prev && prev.zone !== "fuzzy" && pos.timestamp - prev.at <= FIX_FRESH_MS) return;
+          keep({ at: pos.timestamp, zone, hotelM, lotM, accuracyM });
           setPlace(zone);
         },
         (err) => {
           if (gen !== locateGen.current) return;
           const failure = geoFailure(err.code);
-          if (failure === "denied") {
-            setFix(null);
-            setPlace(failure);
-            return;
-          }
-          // A slow re-read at the lot keeps the last place instead of blanking the column.
-          setPlace((prev) => (ZONES.includes(prev) ? prev : failure));
+          const prev = fixRef.current;
+          if (failure === "denied") paused = true;
+          if (failure !== "denied" && prev && Date.now() - prev.at <= FIX_KEEP_MS) return;
+          keep(null);
+          setPlace(failure);
         },
         { enableHighAccuracy: false, maximumAge: 60_000, timeout: 12_000 },
       );
     };
     ask();
     const onVis = () => {
-      if (document.visibilityState === "visible") ask();
+      if (document.visibilityState === "visible" && !paused) ask();
     };
     document.addEventListener("visibilitychange", onVis);
     const again = window.setInterval(onVis, RELOCATE_MS);
@@ -288,12 +316,15 @@ export function ShuttleBoard() {
 
   const mode: Mode = linked ?? prefs.mode;
   const direction = resolveDirection(mode, place);
+  const fixAgeMs = fix && live ? Math.max(0, live.epochMs - fix.at) : null;
+  const fresh = fixAgeMs !== null && fixAgeMs <= FIX_FRESH_MS;
+  /** Minutes since the last reading, once it is too old to count as now. */
+  const staleMin = fix && !fresh && fixAgeMs !== null ? Math.max(1, Math.round(fixAgeMs / 60_000)) : null;
   const atStop =
     !plan &&
-    live !== null &&
     direction !== null &&
     fix !== null &&
-    live.epochMs - fix.at <= FIX_FRESH_MS &&
+    fresh &&
     isAtStop(stopDistance(direction, fix.hotelM, fix.lotM), fix.accuracyM);
   const walkMin = atStop ? 0 : prefs.walkMin;
   const planMin = /^(\d{2}):(\d{2})$/.exec(plan);
@@ -339,6 +370,7 @@ export function ShuttleBoard() {
   const copy = direction ? t.directions[direction] : null;
   const mismatch =
     mode !== "auto" &&
+    fresh &&
     ((place === "at-hotel" && direction === "to-hotel") ||
       (place === "at-lot" && direction === "from-hotel") ||
       (place === "away" && direction === "from-hotel") ||
@@ -356,9 +388,13 @@ export function ShuttleBoard() {
   }
 
   function useMyLocation() {
-    setPlace("pending");
+    setPlace((prev) => (ZONES.includes(prev) ? prev : "pending"));
     setPrefs((prev) => ({ ...prev, locate: true }));
     setLocateNonce((n) => n + 1);
+  }
+
+  function stopLocation() {
+    setPrefs((prev) => ({ ...prev, locate: false }));
   }
 
   function ensureAudio(): AudioContext | null {
@@ -564,7 +600,18 @@ export function ShuttleBoard() {
               <MapPin className="mt-0.5 size-5 shrink-0 text-signal" aria-hidden="true" />
               <div className="min-w-0">
                 <p className="font-medium text-ivory">{t.place[place]}</p>
-                <p className="text-sm text-mute">{placeDetail(place, mode, fix, t)}</p>
+                <p className="text-sm text-mute">
+                  {placeDetail(place, mode, fix, linked !== null, staleMin, t)}
+                </p>
+                {prefs.locate ? (
+                  <button
+                    type="button"
+                    onClick={stopLocation}
+                    className={`mt-1 min-h-11 text-sm text-mute underline underline-offset-4 ${focusRing}`}
+                  >
+                    {t.placeButtons.stopLocation}
+                  </button>
+                ) : null}
               </div>
             </div>
             {mode !== "auto" ? (
@@ -576,7 +623,11 @@ export function ShuttleBoard() {
                 <Unlock className="size-4" aria-hidden="true" />
                 {t.placeButtons.followMe}
               </button>
-            ) : !prefs.locate || place === "timeout" || place === "denied" || place === "unavailable" ? (
+            ) : !prefs.locate ||
+              place === "timeout" ||
+              place === "denied" ||
+              place === "unavailable" ||
+              staleMin !== null ? (
               <button
                 type="button"
                 onClick={useMyLocation}
@@ -1051,9 +1102,18 @@ function StepButton({
   );
 }
 
-function placeDetail(place: PlaceState, mode: Mode, fix: Fix | null, t: Messages): string {
+function placeDetail(
+  place: PlaceState,
+  mode: Mode,
+  fix: Fix | null,
+  fromLink: boolean,
+  staleMin: number | null,
+  t: Messages,
+): string {
   const d = t.placeDetail;
-  const where = fix ? pinDistance(fix, t) : null;
+  const pin = fix ? pinDistance(fix, t) : null;
+  const where = pin && staleMin !== null ? d.ago(pin, staleMin) : pin;
+  if (fromLink) return where ? d.fromLink(where) : d.fromLinkNoPin;
   if (mode !== "auto") return where ? d.locked(where) : d.lockedNoPin;
   switch (place) {
     case "pending":

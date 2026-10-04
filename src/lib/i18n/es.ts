@@ -139,6 +139,9 @@ export const es: Messages = {
   placeDetail: {
     locked: (where: string) => `Columna fijada · ${where}`,
     lockedNoPin: "Columna fijada · sin usar tu ubicación",
+    fromLink: (where: string) => `Del código QR de la parada · ${where}`,
+    fromLinkNoPin: "Del código QR de la parada · solo esta visita",
+    ago: (where: string, minutes: number) => `${where} · hace ${minutes} min`,
     pending: "Buscando la parada del hotel y la del estacionamiento",
     entranceColumn: (where: string) => `Columna de la entrada · ${where}`,
     lotColumn: (where: string) => `Columna del estacionamiento · ${where}`,
@@ -158,6 +161,7 @@ export const es: Messages = {
     tryAgain: "Reintentar",
     useLocation: "Usar ubicación",
     lock: "Fijar",
+    stopLocation: "Dejar de usar la ubicación",
   },
 
   tools: {

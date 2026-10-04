@@ -4,17 +4,20 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 /**
- * Public address of the site, e.g. https://bus.example.com. Set it as a build
- * variable once the domain is chosen. Share cards need an absolute image URL;
- * without it they fall back to a relative one.
+ * Public address of the site, e.g. https://next-bus-up.example.workers.dev or your own
+ * domain later. Share cards need absolute links, so tags that use it are left out
+ * when it isn't set.
  */
 const SITE_URL = (process.env.SITE_URL ?? "").trim().replace(/\/+$/, "");
 
-/** Fills %SITE_URL% in index.html. */
+/** Fills %SITE_URL% in index.html, or drops the tags that need it. */
 function siteUrl(): Plugin {
   return {
     name: "nbu:site-url",
-    transformIndexHtml: (html) => html.replaceAll("%SITE_URL%", SITE_URL),
+    transformIndexHtml: (html) =>
+      SITE_URL
+        ? html.replaceAll("%SITE_URL%", SITE_URL)
+        : html.replace(/^\s*<meta[^>]*(?:%SITE_URL%|"og:image:)[^>]*>\n/gm, ""),
   };
 }
 

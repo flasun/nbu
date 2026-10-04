@@ -180,6 +180,11 @@ export const en = {
   placeDetail: {
     locked: (where: string) => `Column locked · ${where}`,
     lockedNoPin: "Column locked · not using your pin",
+    /** The column came from a stop's QR code and lasts for this visit only. */
+    fromLink: (where: string) => `From the stop's QR code · ${where}`,
+    fromLinkNoPin: "From the stop's QR code · this visit only",
+    /** A location reading that is a few minutes old, e.g. "120 ft from the lot pickup · 4 min ago". */
+    ago: (where: string, minutes: number) => `${where} · ${minutes} min ago`,
     pending: "Looking for the hotel stop and the lot pickup",
     entranceColumn: (where: string) => `${where} · entrance column`,
     lotColumn: (where: string) => `${where} · parking-lot column`,
@@ -201,6 +206,8 @@ export const en = {
     tryAgain: "Try again",
     useLocation: "Use my location",
     lock: "Lock",
+    /** Small text button under the location card. */
+    stopLocation: "Stop using location",
   },
 
   /** Two buttons side by side. Max 18. */
