@@ -719,7 +719,6 @@ export function ShuttleBoard() {
             Opens full screen, like an app. The countdown is one tap away, and it still works when the
             lot has a weak signal.
           </p>
-          <p>An icon already on your home screen will not change. Delete it, then add it again.</p>
           <details className="rounded-card border border-line bg-panel-2 px-3 py-2">
             <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>Apple</summary>
             <p className="mt-2">
