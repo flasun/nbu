@@ -280,10 +280,13 @@ describe("arrival estimate", () => {
     assert.equal(rideDeparture(board), min("7:45AM"));
   });
 
-  it("follows the bus at the stop while it boards", () => {
-    const board = boardAt("to-hotel", min("7:30AM") * 60 + 20, 3);
-    assert.equal(board.next.boarding, true);
-    assert.equal(rideDeparture(board), min("7:30AM"));
+  it("follows the boarding bus only when you're counting from the stop", () => {
+    const atStop = boardAt("to-hotel", min("7:30AM") * 60 + 20, 0);
+    assert.equal(atStop.next.boarding, true);
+    assert.equal(rideDeparture(atStop), min("7:30AM"));
+    const walking = boardAt("to-hotel", min("7:30AM") * 60 + 20, 3);
+    assert.equal(walking.next.boarding, true);
+    assert.equal(rideDeparture(walking), min("7:45AM"));
   });
 
   it("follows the next bus when the walk is zero", () => {

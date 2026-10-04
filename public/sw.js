@@ -57,9 +57,9 @@ self.addEventListener("fetch", (event) => {
   if (STATIC_RE.test(url.pathname)) event.respondWith(orNetwork(staleWhileRevalidate(event), req));
 });
 
-/** The board's own address: "/" with nothing but an optional ?dir=. */
+/** Every "/" address is the board (with ?dir=, ?utm_source=, ...) except the platform's install page. */
 function isBoard(url) {
-  return [...url.searchParams.keys()].every((key) => key === "dir");
+  return !url.searchParams.has("install");
 }
 
 /** A broken cache must never stop the app loading while the network works. */
@@ -76,7 +76,8 @@ async function page(event, board) {
   });
   event.waitUntil(network.then(() => saving).catch(() => {}));
 
-  const saved = await cache.match(SHELL, { ignoreVary: true });
+  // A failing lookup falls back to the request already in flight instead of fetching twice.
+  const saved = await cache.match(SHELL, { ignoreVary: true }).catch(() => null);
   if (!saved) return network.catch(() => Response.error());
   const fromNetwork = network.then(
     (res) => (res.status >= 500 ? saved : res),
