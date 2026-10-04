@@ -777,7 +777,6 @@ export function ShuttleBoard() {
         </summary>
         <div className="mt-3 space-y-2 text-pretty">
           <p>{t.install.intro}</p>
-          <p>{t.install.existing}</p>
           <details className="rounded-card border border-line bg-panel-2 px-3 py-2">
             <summary className={`cursor-pointer font-medium text-ivory ${focusRing}`}>Apple</summary>
             <p className="mt-2">{t.install.apple}</p>

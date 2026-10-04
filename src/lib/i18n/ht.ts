@@ -218,7 +218,6 @@ export const ht: Messages = {
     title: "Mete l sou telefòn ou",
     intro:
       "Li louvri sou tout ekran an, tankou yon aplikasyon. Ou peze yon fwa epi ou wè konbyen tan ki rete, menm lè siyal la fèb nan pakin nan.",
-    existing: "Yon ikòn ki deja sou ekran prensipal ou p ap chanje. Efase l, epi mete l ankò.",
     apple: "Louvri paj sa a nan Safari. Peze “Share”, apre “Add to Home Screen”. Chrome sou iPhone pa ka mete ikòn nan.",
     android: "Nan Chrome: peze meni an, apre “Install app”.",
   },

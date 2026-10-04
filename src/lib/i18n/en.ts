@@ -277,7 +277,6 @@ export const en = {
   install: {
     title: "Add it to your phone",
     intro: "Opens full screen, like an app. The countdown is one tap away, and it still works when the lot has a weak signal.",
-    existing: "An icon already on your home screen will not change. Delete it, then add it again.",
     apple: "Open this page in Safari. Share, then Add to Home Screen. Chrome on an iPhone cannot set the icon.",
     android: "In Chrome: menu, then Install app.",
   },
