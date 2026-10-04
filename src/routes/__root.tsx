@@ -2,6 +2,8 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-r
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
+import displayFont from "@fontsource/barlow-condensed/files/barlow-condensed-latin-600-normal.woff2?url";
+import bodyFont from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
 
 const APP_NAME = "Next Bus Up";
 
@@ -27,12 +29,8 @@ export const Route = createRootRoute({
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/nbu-icon-180.png" },
       { rel: "preload", href: "/__grok/icon-180.png", as: "image" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Outfit:wght@400;500;600;700&display=swap",
-      },
+      { rel: "preload", href: displayFont, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+      { rel: "preload", href: bodyFont, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
     ],
   }),
   component: () => (

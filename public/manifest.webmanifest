@@ -1,6 +1,7 @@
 {
   "name": "Next Bus Up",
   "short_name": "Next Bus Up",
+  "description": "Next employee shuttle between the parking lot and the hotel, with a live countdown.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -25,6 +26,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "To hotel",
+      "short_name": "To hotel",
+      "description": "Buses leaving the parking lot",
+      "url": "/?dir=to"
+    },
+    {
+      "name": "From hotel",
+      "short_name": "From hotel",
+      "description": "Buses leaving the employee entrance",
+      "url": "/?dir=from"
     }
   ]
 }

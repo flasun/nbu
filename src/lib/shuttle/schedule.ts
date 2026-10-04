@@ -6,11 +6,10 @@
  *  Neither side runs 1:30–3:00 AM.
  */
 
-export const SHEET_LABEL = "April 28, 2026";
-/** Calendar date of SHEET_LABEL. Used to warn when the sheet is old. */
+/** Date the printed times were published or last updated. A sheet usually holds for years. */
 export const SHEET_ISO = "2026-04-28";
-/** Show a warning once the sheet is at least this many days old. */
-export const SHEET_STALE_DAYS = 45;
+/** About how long the ride takes, either way. Traffic can stretch it. */
+export const RIDE_MIN = 7;
 export const DISPATCH_PHONE = "4073136990";
 export const DISPATCH_DISPLAY = "407.313.6990";
 
@@ -153,18 +152,22 @@ export const DEPARTURES: Record<Direction, number[]> = {
 
 export const DIRECTION_COPY: Record<
   Direction,
-  { title: string; stop: string; leaves: string; column: string }
+  { title: string; stop: string; leaves: string; column: string; arrives: string; directions: string }
 > = {
   "to-hotel": {
     title: "To hotel",
     stop: "Parking lot",
     leaves: "Leaves the parking lot",
     column: "This is the parking-lot column. The entrance column is hidden.",
+    arrives: "Gets to the hotel",
+    directions: "Directions to the parking lot in your maps app",
   },
   "from-hotel": {
     title: "From hotel",
     stop: "Employee entrance",
     leaves: "Leaves the employee entrance",
     column: "This is the employee-entrance column. The lot column is hidden.",
+    arrives: "Gets to the lot",
+    directions: "Directions to the employee entrance in your maps app",
   },
 };
