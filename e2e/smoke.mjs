@@ -2,32 +2,56 @@
 // Uses `vite preview`. Set CHROMIUM_PATH to use a Chromium that is already installed.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 
-const PORT = 4173;
-const BASE = `http://127.0.0.1:${PORT}/`;
 const MOBILE = { width: 390, height: 844 };
 
+let BASE = "";
 let server;
 let browser;
 
+/** A port nothing else is using, so the test never talks to some other server. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
 before(async () => {
+  const script = /src="(\/assets\/index-[^"]+\.js)"/.exec(readFileSync("dist/index.html", "utf8"))?.[1];
+  assert.ok(script, "dist/index.html has no app script: run npm run build first");
+  const port = await freePort();
+  BASE = `http://127.0.0.1:${port}/`;
   server = spawn(
     "npx",
-    ["vite", "preview", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"],
-    {
-      stdio: "ignore",
-    },
+    ["vite", "preview", "--port", String(port), "--strictPort", "--host", "127.0.0.1"],
+    { stdio: "ignore" },
   );
-  for (let i = 0; i < 60; i++) {
+  let exited = null;
+  server.once("exit", (code) => (exited = code ?? "signal"));
+  let html = "";
+  for (let i = 0; i < 60 && exited === null; i++) {
     try {
-      if ((await fetch(BASE)).ok) break;
+      const res = await fetch(BASE);
+      if (res.ok) {
+        html = await res.text();
+        break;
+      }
     } catch {
       // not up yet
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+  assert.equal(exited, null, `vite preview exited early (${exited})`);
+  assert.ok(html.includes(script), "the preview isn't serving this checkout's dist/");
   browser = await chromium.launch(
     process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
   );

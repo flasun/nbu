@@ -387,8 +387,9 @@ export function boardAt(
 
 /** Departure the arrival estimate follows: the next bus, or the one you can still make. */
 export function rideDeparture(board: BoardSnapshot): number | null {
-  if (board.next.boarding || board.leaveInSec >= 0) return board.next.minutes;
-  return board.catchMinutes;
+  // A bus that is boarding is only yours if you're counting from the stop.
+  if (board.next.boarding) return board.walkMin === 0 ? board.next.minutes : board.catchMinutes;
+  return board.leaveInSec >= 0 ? board.next.minutes : board.catchMinutes;
 }
 
 export function daypart(minutes: number): string {

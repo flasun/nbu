@@ -56,13 +56,15 @@ One-time setup in the Cloudflare dashboard:
 2. Name the Worker **`next-bus-up`**. It must match `name` in `wrangler.jsonc`.
 3. Build command: `npm run build`. Deploy command: `npx wrangler deploy` (the default).
 4. Production branch: `main`. Leave preview builds on, so every pull request gets its own link.
-5. Optional: add a build variable `SITE_URL` (for example `https://bus.example.com`) so share cards
-   use absolute links.
+5. Add a build variable `SITE_URL` with the site's address, starting with the free one Cloudflare
+   shows after the first deploy (`https://next-bus-up.<your-subdomain>.workers.dev`). Change it when
+   you add your own domain. Link previews in group chats need it; without it the share image is
+   left out.
 6. To use your own domain: **Worker → Settings → Domains & Routes → Add → Custom domain**. The domain
    has to be on Cloudflare DNS.
 
 After that, every push to `main` deploys. To deploy by hand: `npx wrangler login`, then
-`npm run deploy`.
+`SITE_URL=https://… npm run deploy`.
 
 `public/_headers` sets the response headers: hashed files under `/assets/` are cached for a year, while
 `sw.js` and the page always revalidate. It also sets a strict Content-Security-Policy and
@@ -80,3 +82,16 @@ block it.
 - Only the board itself is ever saved as the page.
 
 Change `CACHE` in `sw.js` only when you change these rules.
+
+## Retire bus.grok.me
+
+Grok keeps serving its own copy, and phones that installed it keep an offline copy of the old board.
+Once the Cloudflare address works, make one last edit in Grok so those riders move over:
+
+> Replace the whole page with a short "Next Bus Up has moved" screen that links to NEW_ADDRESS and
+> redirects there after 3 seconds. Replace `public/sw.js` with a service worker that, on activate,
+> deletes every cache, unregisters itself and reloads open pages. Keep everything else as is.
+
+Publish it and leave it up for a few weeks. Riders then delete the old home-screen icon and add the
+new one; the board's "Add it to your phone" section already tells them how.
+
