@@ -217,6 +217,7 @@ export const pt: Messages = {
     locationOff:
       "Com a localização desligada, toque em uma coluna e ela fica salva neste celular. O QR code de um ponto abre a coluna daquele ponto, só nessa visita.",
     privacy: "Este app nunca envia sua localização para lugar nenhum. O link do mapa só leva a posição do ponto.",
+    source: "Código-fonte no GitHub",
     screenChime:
       "“Manter tela ligada” deixa a tela acesa enquanto você espera no ponto. “Aviso sonoro” toca um bipe curto quando faltam 5 minutos, 2 minutos e 30 segundos para o ônibus sair, e só enquanto esta página estiver aberta.",
     orlando: (rideMin: number) =>

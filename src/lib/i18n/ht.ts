@@ -206,6 +206,7 @@ export const ht: Messages = {
     locationOff:
       "Lè lokalizasyon fèmen, peze yon kolòn epi l ap rete konsa sou telefòn sa a. Si w eskane kòd QR yon arè, w ap wè kolòn arè sa a pou fwa sa a sèlman.",
     privacy: "Tablo sa a pa janm voye pozisyon w okenn kote. Lyen kat la pote pozisyon arè a sèlman.",
+    source: "Kòd sous la sou GitHub",
     screenChime:
       "“Kenbe ekran limen” kenbe ekran an limen pandan w ap tann nan arè a. “Son alèt” fè yon ti son lè li rete 5 minit, 2 minit ak 30 segonn anvan bis la pati, epi sèlman lè paj sa a louvri.",
     orlando: (rideMin: number) =>

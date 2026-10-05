@@ -216,6 +216,7 @@ export const es: Messages = {
     locationOff:
       "Con la ubicación desactivada, toca una columna y se queda guardada en este teléfono. El código QR de una parada muestra esa columna solo durante esa visita.",
     privacy: "Esta app nunca envía tu ubicación a ningún lado. El enlace del mapa solo lleva la posición de la parada.",
+    source: "Código fuente en GitHub",
     screenChime:
       "“No apagar pantalla” mantiene la pantalla encendida mientras esperas en la parada. “Aviso sonoro” reproduce un tono corto cuando faltan 5 minutos, 2 minutos y 30 segundos para que salga el autobús, y solo mientras esta página esté abierta.",
     orlando: (rideMin: number) =>

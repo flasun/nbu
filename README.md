@@ -7,6 +7,9 @@ at the lot with no signal.
 It's a static site: plain React, built with Vite, and hosted on Cloudflare. There is no server, no
 database and no tracking. Location, when a rider turns it on, never leaves the phone.
 
+The code is public so anyone can check what the board does, but no license is granted: it is
+not open for reuse.
+
 ## Run it
 
 Needs Node 22.

@@ -20,6 +20,9 @@ export const FEEDBACK_FORM =
 /** Questions about this board. Not the Skyline bus form. */
 export const CONTACT_FORM = "https://forms.gle/qV3n5Md74r2ovDji9";
 
+/** Public source code, so anyone can check what the board does with location. */
+export const SOURCE_CODE = "https://github.com/flasun/nbu";
+
 export const TZ = "America/New_York";
 
 /** Employee bus stop at the hotel on Dream Tree Blvd. */
