@@ -128,6 +128,10 @@ test("opens the full list on a desktop", async () => {
       .evaluate((node) => node.open),
     true,
   );
+  // In the collapsed "How the column gets picked" section, under the privacy line.
+  const source = page.locator('a[href="https://github.com/flasun/nbu"]');
+  assert.equal(await source.textContent(), "Source code on GitHub");
+  assert.equal(await source.getAttribute("rel"), "noreferrer");
   assert.deepEqual(errors, []);
   await context.close();
 });

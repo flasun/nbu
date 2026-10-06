@@ -24,6 +24,7 @@ import {
   HOTEL,
   LOT,
   RIDE_MIN,
+  SOURCE_CODE,
   type Direction,
 } from "@/lib/shuttle/schedule";
 import {
@@ -842,7 +843,17 @@ export function ShuttleBoard() {
           </ul>
           <p>{t.how.rough}</p>
           <p>{t.how.locationOff}</p>
-          <p>{t.how.privacy}</p>
+          <p>
+            {t.how.privacy}{" "}
+            <a
+              href={SOURCE_CODE}
+              target="_blank"
+              rel="noreferrer"
+              className={`text-ivory underline ${focusRing}`}
+            >
+              {t.how.source}
+            </a>
+          </p>
           <p>{t.how.screenChime}</p>
           <p>{t.how.orlando(RIDE_MIN)}</p>
         </div>

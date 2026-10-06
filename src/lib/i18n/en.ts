@@ -270,6 +270,8 @@ export const en = {
     locationOff:
       "With location off, tap a column and it sticks on this phone. A stop's QR code shows that column for that visit.",
     privacy: "This board never sends your location anywhere. The map link only carries the stop's position.",
+    /** Link under the privacy line. Keep "GitHub" as it is. */
+    source: "Source code on GitHub",
     screenChime:
       "Keep screen on holds the display while you wait at the stop. Chime plays a short tone when a bus is 5 minutes, 2 minutes, and 30 seconds out, and only while this page is open.",
     orlando: (rideMin: number) =>
