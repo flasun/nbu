@@ -56,8 +56,9 @@
   }
 }
 
+/* A few pulses when it appears, then still: an endless animation keeps the phone's display busy. */
 .live-dot {
-  animation: live-pulse 1.8s ease-in-out infinite;
+  animation: live-pulse 1.8s ease-in-out 3;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -43,6 +43,14 @@ Everything lives in `src/lib/shuttle/schedule.ts`.
 The dispatch number, the feedback forms, the stop locations and the ride time (`RIDE_MIN`) are in the
 same file.
 
+## Battery
+
+The board is built to be light on a phone: no background requests, one clock tick a second only
+while the page is on screen, a location read about once a minute only when location is on and the
+page is visible, and no endless animation. "Keep screen on" (the biggest cost) turns itself off after
+20 minutes and is never remembered for the next visit. Turning the chime off releases the phone's
+audio. See the "Battery is life" rule in `AGENTS.md` before adding anything that runs on a timer.
+
 ## Languages
 
 The board speaks English, Spanish, Haitian Creole (Kreyòl) and Brazilian Portuguese. It follows the
