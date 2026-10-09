@@ -56,17 +56,34 @@ export type BoardSnapshot = {
   catchMinutes: number | null;
 };
 
+/**
+ * Building an Intl.DateTimeFormat is the slow part of reading the time, and the board reads it
+ * every second, so each one is built once. (It used to be built about 1,800 times a second.)
+ */
+const NOW_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: TZ,
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  weekday: "short",
+  month: "numeric",
+  day: "numeric",
+});
+
+const WALL_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: TZ,
+  hourCycle: "h23",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
 export function readOrlando(date: Date): OrlandoNow {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-    weekday: "short",
-    month: "numeric",
-    day: "numeric",
-  }).formatToParts(date);
+  const parts = NOW_FORMAT.formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
   let hour = Number(get("hour"));
@@ -205,16 +222,7 @@ export function geoFailure(code: number): "denied" | "unavailable" | "timeout" {
 type Wall = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 
 function orlandoWall(date: Date): Wall {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date);
+  const parts = WALL_FORMAT.formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) =>
     Number(parts.find((part) => part.type === type)?.value ?? "0");
   let hour = get("hour");
@@ -235,6 +243,10 @@ function tzOffsetMs(utcMs: number): number {
   return asUtc - utcMs;
 }
 
+/** The same wall times come up every second, so the answers are kept. Cleared when it grows. */
+const WALL_CACHE = new Map<number, number>();
+const WALL_CACHE_MAX = 2000;
+
 /** Wall-clock time in Orlando, as a UTC epoch. Handles the two DST nights. */
 export function zonedWallToUtc(
   year: number,
@@ -245,8 +257,13 @@ export function zonedWallToUtc(
   second = 0,
 ): number {
   const guess = Date.UTC(year, month - 1, day, hour, minute, second);
+  const cached = WALL_CACHE.get(guess);
+  if (cached !== undefined) return cached;
   const utc = guess - tzOffsetMs(guess - tzOffsetMs(guess));
-  return guess - tzOffsetMs(utc);
+  const result = guess - tzOffsetMs(utc);
+  if (WALL_CACHE.size >= WALL_CACHE_MAX) WALL_CACHE.clear();
+  WALL_CACHE.set(guess, result);
+  return result;
 }
 
 /** Today's Orlando date at a chosen clock time, as a UTC epoch. */
@@ -264,8 +281,7 @@ function shiftDate(year: number, month: number, day: number, days: number) {
   };
 }
 
-function departureUtc(nowMs: number, dayOffset: number, minutes: number): number {
-  const wall = orlandoWall(new Date(nowMs));
+function departureUtc(wall: Wall, dayOffset: number, minutes: number): number {
   const date = shiftDate(wall.year, wall.month, wall.day, dayOffset);
   return zonedWallToUtc(date.year, date.month, date.day, Math.floor(minutes / 60), minutes % 60, 0);
 }
@@ -311,12 +327,13 @@ export function isDeparturePast(minutes: number, nowSec: number, nextMinutes: nu
 
 function hitsAround(times: number[], nowSec: number, nowMs?: number): BusHit[] {
   const hits: BusHit[] = [];
+  const wall = nowMs == null ? null : orlandoWall(new Date(nowMs));
   for (const day of [0, 1]) {
     for (const minutes of times) {
       const waitSec =
         nowMs == null
           ? day * 86400 + minutes * 60 - nowSec
-          : Math.round((departureUtc(nowMs, day, minutes) - nowMs) / 1000);
+          : Math.round((departureUtc(wall as Wall, day, minutes) - nowMs) / 1000);
       if (waitSec < -GRACE_SEC) continue;
       if (waitSec > 36 * 3600) continue;
       hits.push({
@@ -345,12 +362,13 @@ export function boardAt(
   const following = hits.slice(1, 4);
 
   let last: BoardSnapshot["last"] = null;
+  const wall = nowMs == null ? null : orlandoWall(new Date(nowMs));
   for (const day of [-1, 0]) {
     for (const minutes of times) {
       const ago =
         nowMs == null
           ? now - (day * 86400 + minutes * 60)
-          : Math.round((nowMs - departureUtc(nowMs, day, minutes)) / 1000);
+          : Math.round((nowMs - departureUtc(wall as Wall, day, minutes)) / 1000);
       if (ago > GRACE_SEC && (last === null || ago < last.agoSec)) {
         last = { minutes, agoSec: ago };
       }

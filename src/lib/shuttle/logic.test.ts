@@ -316,3 +316,46 @@ describe("Orlando calendar", () => {
     assert.equal(listLabel(min("10:00PM")), "night");
   });
 });
+
+describe("battery: the board's per-second work", () => {
+  const nowMs = Date.UTC(2026, 9, 3, 11, 22, 0); // 7:22 AM in Orlando
+
+  it("builds no date formatters while the clock ticks", () => {
+    // Warm up, then count: the formatters exist already, and a tick must not make more.
+    boardAt("to-hotel", 7 * 3600 + 22 * 60, 3, nowMs);
+    const Original = Intl.DateTimeFormat;
+    let built = 0;
+    Intl.DateTimeFormat = function (...args: ConstructorParameters<typeof Original>) {
+      built++;
+      return new Original(...args);
+    } as unknown as typeof Intl.DateTimeFormat;
+    try {
+      for (let second = 0; second < 120; second++) {
+        const ms = nowMs + second * 1000;
+        readOrlando(new Date(ms));
+        boardAt("to-hotel", 7 * 3600 + 22 * 60 + second, 3, ms);
+        boardAt("from-hotel", 7 * 3600 + 22 * 60 + second, 3, ms);
+      }
+    } finally {
+      Intl.DateTimeFormat = Original;
+    }
+    assert.equal(built, 0);
+  });
+
+  it("gives the same answer from the saved wall times as from scratch", () => {
+    const first = boardAt("to-hotel", 7 * 3600 + 22 * 60, 3, nowMs);
+    // Fill the saved times past their limit so they are rebuilt from scratch.
+    for (let i = 0; i < 2500; i++) zonedWallToUtc(2027, 1 + (i % 12), 1 + (i % 28), i % 24, i % 60);
+    assert.deepEqual(boardAt("to-hotel", 7 * 3600 + 22 * 60, 3, nowMs), first);
+  });
+
+  it("still gets the two daylight-saving nights right after caching", () => {
+    // Spring forward: 2:00 AM does not exist on March 8, 2026. Fall back: 1:30 AM happens twice on Nov 1.
+    const spring = zonedWallToUtc(2026, 3, 8, 3, 0);
+    assert.equal(zonedWallToUtc(2026, 3, 8, 3, 0), spring);
+    assert.equal(new Date(spring).toISOString(), "2026-03-08T07:00:00.000Z");
+    const fall = zonedWallToUtc(2026, 11, 1, 3, 0);
+    assert.equal(zonedWallToUtc(2026, 11, 1, 3, 0), fall);
+    assert.equal(new Date(fall).toISOString(), "2026-11-01T08:00:00.000Z");
+  });
+});

@@ -414,3 +414,108 @@ test("keeps the times list on the next bus after leaving the focus screen", asyn
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+/** Pretend the phone's screen turned off (or back on). */
+function setHidden(page, hidden) {
+  return page.evaluate((value) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (value ? "hidden" : "visible") });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+}
+
+test("does no work while the screen is off: no clock ticks, no location reads", async () => {
+  const context = await browser.newContext({
+    viewport: MOBILE,
+    timezoneId: "America/Los_Angeles",
+    geolocation: { latitude: 28.4009498, longitude: -81.5452239, accuracy: 20 },
+    permissions: ["geolocation"],
+  });
+  await context.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.abort());
+  await context.addInitScript(() => {
+    localStorage.setItem(
+      "bus-up-v1",
+      JSON.stringify({ mode: "auto", walkMin: 3, chime: false, awake: false, locate: true, focus: false, lang: null }),
+    );
+    window.__reads = 0;
+    const read = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
+    navigator.geolocation.getCurrentPosition = (...args) => {
+      window.__reads++;
+      return read(...args);
+    };
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.clock.install({ time: new Date("2026-10-03T11:22:00Z") });
+  await page.goto(BASE, { waitUntil: "load" });
+  await page.locator('[data-testid="clock"]').waitFor();
+  await page.clock.runFor(130_000);
+  const reads = () => page.evaluate(() => window.__reads);
+  const clock = () => page.getByTestId("clock").innerText();
+  assert.ok((await reads()) >= 3, "reads about once a minute while visible");
+
+  await setHidden(page, true);
+  const readsBefore = await reads();
+  const clockBefore = await clock();
+  await page.clock.runFor(10 * 60_000);
+  assert.equal(await reads(), readsBefore, "no location reads while hidden");
+  assert.equal(await clock(), clockBefore, "the clock doesn't tick while hidden");
+
+  await setHidden(page, false);
+  await page.clock.runFor(1500);
+  assert.ok((await reads()) > readsBefore, "reads again as soon as it is back");
+  assert.notEqual(await clock(), clockBefore, "and the clock catches up at once");
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("keep screen on turns itself off, and never carries over to the next visit", async () => {
+  const { context, page, errors } = await open("?dir=to", { iso: "2026-10-03T11:22:00Z" });
+  await page.evaluate(() => {
+    window.__locks = { held: 0, released: 0 };
+    Object.defineProperty(navigator, "wakeLock", {
+      configurable: true,
+      value: {
+        request: async () => {
+          window.__locks.held++;
+          return { release: async () => void window.__locks.released++, addEventListener() {} };
+        },
+      },
+    });
+  });
+  const button = page.getByRole("button", { name: /Keep screen on|Screen stays on/ });
+  await button.click();
+  assert.equal(await button.getAttribute("aria-pressed"), "true");
+  await page.clock.runFor(19 * 60_000);
+  assert.equal(await button.getAttribute("aria-pressed"), "true", "still on after 19 minutes");
+  await page.clock.runFor(2 * 60_000);
+  assert.equal(await button.getAttribute("aria-pressed"), "false", "off after 20 minutes");
+  assert.deepEqual(await page.evaluate(() => window.__locks), { held: 1, released: 1 });
+
+  // A saved "on" from an earlier visit doesn't keep the screen lit on the next one.
+  await button.click();
+  await page.reload({ waitUntil: "load" });
+  await page.locator('[data-testid="clock"]').waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: /Keep screen on|Screen stays on/ }).getAttribute("aria-pressed"),
+    "false",
+  );
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("the times list still moves on when a bus leaves", async () => {
+  // 7:29:40 AM in Orlando, list open on a desktop.
+  const { context, page, errors } = await open("?dir=to", {
+    iso: "2026-10-03T11:29:40Z",
+    viewport: { width: 1280, height: 800 },
+  });
+  // A row is the list item that holds the time itself (the group wrapper holds many).
+  const row = (time) => page.locator("details li.border-t").filter({ hasText: new RegExp(`^${time}`) });
+  assert.match(await row("7:30 AM").innerText(), /Next/i);
+  await page.clock.runFor(2 * 60_000);
+  assert.match(await row("7:30 AM").innerText(), /Left/i);
+  assert.match(await row("7:45 AM").innerText(), /Next/i);
+  assert.deepEqual(errors, []);
+  await context.close();
+});

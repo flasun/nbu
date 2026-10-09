@@ -24,4 +24,9 @@ touch the page, `public/sw.js`, `index.html` or `vite.config.ts`. CI runs all of
   component. A new or changed line goes into all four files; write whole phrases with placeholders,
   never sentences glued together from pieces. Keep times exactly as passed in ("7:30 AM").
   `npm test` checks that nothing is missing, left in English, too long, or missing its time.
+- **Battery is life.** Riders run this on phones all shift. No timer, location read or animation may
+  keep running while the page is hidden or without a reason. Never build `Intl.DateTimeFormat` (or
+  anything else slow) inside the per-second path: keep it at module level. "Keep screen on" must
+  switch itself off. `npm test` checks that a tick builds no date formatters; `npm run e2e` checks
+  that nothing ticks or reads location while the page is hidden.
 - No accounts, database, trackers or third-party scripts without asking the owner first.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   Bell,
   BellOff,
@@ -84,6 +84,8 @@ const FIX_KEEP_MS = 30 * 60_000;
 const RELOCATE_MS = 60_000;
 /** A QR column lasts for the visit: until the page has been away this long. */
 const VISIT_GAP_MS = 30 * 60_000;
+/** "Keep screen on" turns itself off after this long. */
+const AWAKE_MAX_MS = 20 * 60_000;
 const ZONES: readonly PlaceState[] = ["at-hotel", "at-lot", "away", "fuzzy", "far"];
 
 const focusRing =
@@ -106,18 +108,32 @@ function isAppleDevice(): boolean {
   return /iP(hone|ad|od)/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
 }
 
+/** The clock ticks once a second while the page is on screen, and not at all while it's hidden. */
 function useOrlandoNow(): OrlandoNow | null {
   const [now, setNow] = useState<OrlandoNow | null>(() => readOrlando(new Date()));
   useEffect(() => {
+    let id: number | undefined;
     const tick = () => setNow(readOrlando(new Date()));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    const onVis = () => {
-      if (document.visibilityState === "visible") tick();
+    const start = () => {
+      if (id === undefined) id = window.setInterval(tick, 1000);
     };
+    const stop = () => {
+      window.clearInterval(id);
+      id = undefined;
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        tick();
+        start();
+      } else {
+        stop();
+      }
+    };
+    tick();
+    if (document.visibilityState === "visible") start();
     document.addEventListener("visibilitychange", onVis);
     return () => {
-      window.clearInterval(id);
+      stop();
       document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
@@ -283,14 +299,32 @@ export function ShuttleBoard() {
       );
     };
     ask();
-    const onVis = () => {
-      if (document.visibilityState === "visible" && !paused) ask();
+    // Re-read once a minute while the page is on screen. No timer runs while it's hidden.
+    let again: number | undefined;
+    const arm = () => {
+      if (again === undefined) {
+        again = window.setInterval(() => {
+          if (!paused) ask();
+        }, RELOCATE_MS);
+      }
     };
+    const disarm = () => {
+      window.clearInterval(again);
+      again = undefined;
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        if (!paused) ask();
+        arm();
+      } else {
+        disarm();
+      }
+    };
+    if (document.visibilityState === "visible") arm();
     document.addEventListener("visibilitychange", onVis);
-    const again = window.setInterval(onVis, RELOCATE_MS);
     return () => {
       locateGen.current += 1;
-      window.clearInterval(again);
+      disarm();
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [prefs.locate, locateNonce]);
@@ -318,12 +352,15 @@ export function ShuttleBoard() {
       }
     };
     void acquire();
+    // The screen is the biggest battery cost, so it never stays held for long by accident.
+    const autoOff = window.setTimeout(() => setPrefs((prev) => ({ ...prev, awake: false })), AWAKE_MAX_MS);
     const onVis = () => {
       if (document.visibilityState === "visible") void acquire();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
+      window.clearTimeout(autoOff);
       document.removeEventListener("visibilitychange", onVis);
       void wakeLock.current?.release();
       wakeLock.current = null;
@@ -477,6 +514,9 @@ export function ShuttleBoard() {
       setChimeArmed(false);
       chimeDirection.current = null;
       prevWait.current = null;
+      // Release the phone's audio session; arming again is a tap, which can open a new one.
+      void audioRef.current?.close().catch(() => {});
+      audioRef.current = null;
       setPrefs((prev) => ({ ...prev, chime: false }));
       return;
     }
@@ -1367,6 +1407,10 @@ function Callout({ kind, resume, t }: { kind: "gap" | "lot"; resume: string; t: 
   );
 }
 
+/**
+ * The list has about 120 rows and the page re-renders every second. A row only changes when it
+ * becomes the next bus or the bus leaves, so the rows are rebuilt only then, not on every tick.
+ */
 function BoardList({
   direction,
   nowSec,
@@ -1382,52 +1426,59 @@ function BoardList({
   nextRow: RefObject<HTMLLIElement | null>;
   t: Messages;
 }) {
-  const times = [...DEPARTURES[direction]].sort((a, b) => serviceRank(a) - serviceRank(b));
-  const tone = columnTone(direction);
-  const groups: { label: DayPart; times: number[] }[] = [];
-  for (const time of times) {
-    const label = listLabel(time);
-    const last = groups[groups.length - 1];
-    if (!last || last.label !== label) groups.push({ label, times: [time] });
-    else last.times.push(time);
-  }
+  const { times, groups } = useMemo(() => {
+    const sorted = [...DEPARTURES[direction]].sort((a, b) => serviceRank(a) - serviceRank(b));
+    const grouped: { label: DayPart; times: number[] }[] = [];
+    for (const time of sorted) {
+      const label = listLabel(time);
+      const last = grouped[grouped.length - 1];
+      if (!last || last.label !== label) grouped.push({ label, times: [time] });
+      else last.times.push(time);
+    }
+    return { times: sorted, groups: grouped };
+  }, [direction]);
 
-  return (
-    <ul
-      ref={listRef}
-      className="relative max-h-96 overflow-auto rounded-2xl border border-line"
-    >
-      {groups.map((group) => (
-        <li key={group.label} className="list-none">
-          <p className="sticky top-0 bg-panel-2 px-4 py-2 text-xs tracking-wide text-mute uppercase">
-            {t.list.parts[group.label]}
-          </p>
-          <ul>
-            {group.times.map((time) => {
-              const isNext = time === next.minutes;
-              const past = isDeparturePast(time, nowSec, next.minutes);
-              return (
-                <li
-                  key={time}
-                  ref={isNext ? nextRow : undefined}
-                  className={`flex items-center justify-between border-t border-line px-4 py-2 ${
-                    isNext ? `${tone.bg} ${tone.ink}` : past ? "text-mute" : "text-ivory"
-                  }`}
-                >
-                  <span className="font-display text-2xl leading-none font-semibold tracking-wide tabular-nums">
-                    {formatClock(time)}
-                  </span>
-                  <span className="text-xs tracking-wide uppercase">
-                    {isNext ? (next.boarding ? t.list.now : t.list.next) : past ? t.list.left : ""}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </li>
-      ))}
-    </ul>
-  );
+  // One character per row: "1" once its bus has left. Cheap to build, and it only changes now and then.
+  const left = times.map((time) => (isDeparturePast(time, nowSec, next.minutes) ? "1" : "0")).join("");
+
+  return useMemo(() => {
+    const tone = columnTone(direction);
+    const pastAt = new Map(times.map((time, i) => [time, left[i] === "1"]));
+    return (
+      <ul ref={listRef} className="relative max-h-96 overflow-auto rounded-2xl border border-line">
+        {groups.map((group) => (
+          <li key={group.label} className="list-none">
+            <p className="sticky top-0 bg-panel-2 px-4 py-2 text-xs tracking-wide text-mute uppercase">
+              {t.list.parts[group.label]}
+            </p>
+            <ul>
+              {group.times.map((time) => {
+                const isNext = time === next.minutes;
+                const past = pastAt.get(time) === true;
+                return (
+                  <li
+                    key={time}
+                    ref={isNext ? nextRow : undefined}
+                    className={`flex items-center justify-between border-t border-line px-4 py-2 ${
+                      isNext ? `${tone.bg} ${tone.ink}` : past ? "text-mute" : "text-ivory"
+                    }`}
+                  >
+                    <span className="font-display text-2xl leading-none font-semibold tracking-wide tabular-nums">
+                      {formatClock(time)}
+                    </span>
+                    <span className="text-xs tracking-wide uppercase">
+                      {isNext ? (next.boarding ? t.list.now : t.list.next) : past ? t.list.left : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    );
+    // `next` is read by its two fields, and the rows by `left`, so a tick that changes none of them reuses the rows.
+  }, [direction, groups, times, left, next.minutes, next.boarding, t, listRef, nextRow]);
 }
 
 function ToolButton({

@@ -39,7 +39,8 @@ export function loadPrefs(): Prefs {
       mode,
       walkMin: Number.isFinite(walkMin) ? Math.min(15, Math.max(0, Math.round(walkMin))) : 3,
       chime: Boolean(parsed.chime),
-      awake: Boolean(parsed.awake),
+      // Never carried over: the screen should only stay on because you asked for it this time.
+      awake: false,
       locate: Boolean(parsed.locate),
       focus: parsed.focus === true,
       lang: isLang(parsed.lang) ? parsed.lang : null,
