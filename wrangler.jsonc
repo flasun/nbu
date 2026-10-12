@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Must match the Worker's name in the Cloudflare dashboard.
-  "name": "next-bus-up",
+  "name": "nbu",
   "compatibility_date": "2026-10-01",
   // Static files only: no Worker script, so there's nothing to run or pay for per request.
   // "/" serves index.html. Anything missing gets a plain 404, never the page: a missing
