@@ -113,11 +113,12 @@ Hanging them:
 One-time setup in the Cloudflare dashboard:
 
 1. **Workers & Pages → Create → Import a repository**, and pick this repository.
-2. Name the Worker **`next-bus-up`**. It must match `name` in `wrangler.jsonc`.
+2. Name the Worker **`nbu`**. It must match `name` in `wrangler.jsonc`.
 3. Build command: `npm run build`. Deploy command: `npx wrangler deploy` (the default).
 4. Production branch: `main`. Leave preview builds on, so every pull request gets its own link.
-5. Add a build variable `SITE_URL` with the site's address, starting with the free one Cloudflare
-   shows after the first deploy (`https://next-bus-up.<your-subdomain>.workers.dev`). Change it when
+5. Under **Worker → Settings → Builds → Variables and secrets**, add `SITE_URL` with the site's
+   address, `https://nbu.racason.workers.dev`. It's a build variable: the "Runtime variables"
+   section is locked for a site that is only static files, and that's expected. Change it when
    you add your own domain. Link previews in group chats need it (without it the share image is
    left out), and the posters print their codes for it.
 6. To use your own domain: **Worker → Settings → Domains & Routes → Add → Custom domain**. The domain
