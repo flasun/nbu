@@ -50,6 +50,8 @@ function preloadFonts(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), siteUrl(), preloadFonts()],
+  // The poster page prints codes for this address and skips its temporary-address warning.
+  define: { __SITE_URL__: JSON.stringify(SITE_URL) },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

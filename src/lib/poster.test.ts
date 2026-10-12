@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import QRCode from "qrcode";
 import { directionFromSearch } from "./shuttle/logic.ts";
-import { POSTER_KINDS, isTemporaryHost, posterOrigin, posterUrl, printedUrl, qrPath } from "./poster.ts";
+import { POSTER_KINDS, isTemporaryHost, posterBase, posterOrigin, posterUrl, printedUrl, qrPath } from "./poster.ts";
 
 describe("poster links", () => {
   it("opens each stop's column, and the plain board for the notice board", () => {
@@ -62,6 +62,25 @@ describe("temporary addresses", () => {
     for (const host of ["bus.example.com", "nextbusup.org", "workers.dev.example.com", "BUS.EXAMPLE.COM.", "notlocal.com"]) {
       assert.equal(isTemporaryHost(host), false, host);
     }
+  });
+});
+
+describe("site address", () => {
+  it("points the codes at SITE_URL without a warning, even from a preview", () => {
+    const live = { origin: "https://nbu.racason.workers.dev", temporary: false };
+    assert.deepEqual(posterBase("https://nbu.racason.workers.dev", "https:", "nbu.racason.workers.dev", "nbu.racason.workers.dev"), live);
+    assert.deepEqual(posterBase("https://nbu.racason.workers.dev/", "https:", "abc-nbu.racason.workers.dev", "abc-nbu.racason.workers.dev"), live);
+    assert.deepEqual(posterBase(" http://bus.example.com ", "http:", "localhost:5173", "localhost"), {
+      origin: "https://bus.example.com",
+      temporary: false,
+    });
+  });
+
+  it("falls back to this page's address, and its warning, without a usable SITE_URL", () => {
+    for (const site of ["", "   ", "nbu.racason.workers.dev", "ftp://bus.example.com"]) {
+      assert.deepEqual(posterBase(site, "http:", "127.0.0.1:4173", "127.0.0.1"), { origin: "http://127.0.0.1:4173", temporary: true }, site);
+    }
+    assert.deepEqual(posterBase("", "https:", "bus.example.com", "bus.example.com"), { origin: "https://bus.example.com", temporary: false });
   });
 });
 
