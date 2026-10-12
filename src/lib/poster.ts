@@ -18,6 +18,32 @@ export function posterOrigin(protocol: string, host: string, hostname: string): 
   return `${scheme}//${host}`;
 }
 
+/**
+ * Where the codes point, and whether to warn that it's a temporary address. The site's own
+ * address (the SITE_URL build variable) wins: it's the one the owner chose to keep, so the
+ * codes use it even on a preview link, and there's no warning. Without it, the codes open the
+ * address this page is on.
+ */
+export function posterBase(
+  siteUrl: string,
+  protocol: string,
+  host: string,
+  hostname: string,
+): { origin: string; temporary: boolean } {
+  const site = parseSite(siteUrl);
+  if (site) return { origin: posterOrigin(site.protocol, site.host, site.hostname), temporary: false };
+  return { origin: posterOrigin(protocol, host, hostname), temporary: isTemporaryHost(hostname) };
+}
+
+function parseSite(siteUrl: string): URL | null {
+  try {
+    const url = new URL(siteUrl.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Address a poster's code opens: the same links as the README (`/?dir=to`, `/?dir=from`). */
 export function posterUrl(origin: string, kind: PosterKind): string {
   const base = origin.replace(/\/+$/, "");

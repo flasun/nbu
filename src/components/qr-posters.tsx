@@ -5,8 +5,7 @@ import { HTML_LANG, LANGS, MESSAGES, type Lang } from "@/lib/i18n";
 import {
   POSTER_KINDS,
   QUIET_ZONE,
-  isTemporaryHost,
-  posterOrigin,
+  posterBase,
   posterUrl,
   printedUrl,
   qrPath,
@@ -28,14 +27,14 @@ for (const lang of LANGS) {
 }
 
 /**
- * Printable posters for the stops. The codes open the address this page is on, so open it on
- * the final address before printing. The page around the posters is in the reader's language;
+ * Printable posters for the stops. The codes open the site's address (SITE_URL), or the address
+ * this page is on when that isn't set. The page around the posters is in the reader's language;
  * the posters themselves are in all four.
  */
 export function QrPosters({ lang }: { lang: Lang }) {
   const t = MESSAGES[lang].poster;
   const { protocol, host, hostname } = window.location;
-  const origin = posterOrigin(protocol, host, hostname);
+  const { origin, temporary } = posterBase(__SITE_URL__, protocol, host, hostname);
   const ids = useId();
   /**
    * Posters to print. A plain on-page choice rather than print events, so the browser's own
@@ -58,7 +57,7 @@ export function QrPosters({ lang }: { lang: Lang }) {
         <p className="font-display text-[1.85rem] leading-none font-semibold tracking-wide text-ivory">Next Bus Up</p>
         <h1 className="mt-4 font-display text-3xl leading-none font-semibold tracking-wide text-signal">{t.title}</h1>
         <p className="mt-2 text-sm text-mute">{t.intro}</p>
-        {isTemporaryHost(hostname) ? (
+        {temporary ? (
           <p
             className="mt-3 flex items-start gap-2 rounded-xl border border-alert/60 bg-alert/10 p-3 text-sm text-ivory"
             data-testid="temporary"

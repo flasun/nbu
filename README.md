@@ -87,11 +87,12 @@ Each poster has its column's color from the board, the column name and "Scan for
 all four languages, the address in print for anyone who can't scan, and the dispatch number. The
 codes are drawn in the browser, so nothing is sent anywhere.
 
-The codes open the address the page is on (always over `https`). Print from the address you'll
-keep: the page warns you when it's a temporary one (`workers.dev`, a preview link, `localhost`, a
-local network name). If you print from a
-`workers.dev` address and add your own domain later, leave the `workers.dev` address turned on
-(**Worker → Settings → Domains & Routes**) so the posters keep working.
+The codes open the site's address from the `SITE_URL` build variable (see "Deploy on Cloudflare"),
+even if you open `/poster` from a preview link. Without `SITE_URL` they open the address the page is
+on (always over `https`), and the page warns you when that looks temporary (`workers.dev`, a preview
+link, `localhost`, a local network name). Setting `SITE_URL` turns the warning off. If you add your
+own domain after printing, leave the old address turned on (**Worker → Settings → Domains &
+Routes**) so the posters keep working.
 
 Once a poster is up, scan it right there: the board should open on the column printed on it.
 
@@ -117,8 +118,8 @@ One-time setup in the Cloudflare dashboard:
 4. Production branch: `main`. Leave preview builds on, so every pull request gets its own link.
 5. Add a build variable `SITE_URL` with the site's address, starting with the free one Cloudflare
    shows after the first deploy (`https://next-bus-up.<your-subdomain>.workers.dev`). Change it when
-   you add your own domain. Link previews in group chats need it; without it the share image is
-   left out.
+   you add your own domain. Link previews in group chats need it (without it the share image is
+   left out), and the posters print their codes for it.
 6. To use your own domain: **Worker → Settings → Domains & Routes → Add → Custom domain**. The domain
    has to be on Cloudflare DNS.
 
