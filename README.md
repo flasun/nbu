@@ -4,8 +4,9 @@ A live countdown for the employee shuttle between the off-site parking lot and t
 entrance on Dream Tree Blvd. It shows one column at a time, always in Orlando time, and keeps working
 at the lot with no signal.
 
-It's a static site: plain React, built with Vite, and hosted on Cloudflare. There is no server, no
-database and no tracking. Location, when a rider turns it on, never leaves the phone.
+It's a static site: plain React, built with Vite, and hosted on Cloudflare. There is no server and no
+database. Cloudflare Web Analytics counts visits without cookies. Location, when a rider turns it on,
+never leaves the phone.
 
 The code is public so anyone can check what the board does, but no license is granted: it is
 not open for reuse.
@@ -129,9 +130,10 @@ After that, every push to `main` deploys. To deploy by hand: `npx wrangler login
 
 `public/_headers` sets the response headers: hashed files under `/assets/` are cached for a year, while
 `sw.js` and the page always revalidate. It also sets a strict Content-Security-Policy and
-`Referrer-Policy: no-referrer`. If you turn on a Cloudflare feature that injects scripts (Web
-Analytics, Rocket Loader, email obfuscation), add its origin to the CSP first, or the browser will
-block it.
+`Referrer-Policy: no-referrer`. Web Analytics is already allowed: `script-src` includes
+`https://static.cloudflareinsights.com` and `connect-src` includes `https://cloudflareinsights.com`.
+If you turn on another Cloudflare feature that injects scripts (Rocket Loader, email obfuscation),
+add its origin to the CSP first, or the browser will block it.
 
 ## How offline works
 
