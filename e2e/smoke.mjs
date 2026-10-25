@@ -64,6 +64,18 @@ after(async () => {
   server?.kill();
 });
 
+/** Page errors, plus console errors. The analytics beacon is blocked with every other origin. */
+function watchErrors(page) {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    if (message.location().url.startsWith("https://static.cloudflareinsights.com/")) return;
+    errors.push(message.text());
+  });
+  return errors;
+}
+
 /** Open the board at a fixed instant, with the phone set to another time zone on purpose. */
 async function open(path, { iso, viewport = MOBILE, prefs } = {}) {
   const context = await browser.newContext({ viewport, timezoneId: "America/Los_Angeles" });
@@ -78,9 +90,7 @@ async function open(path, { iso, viewport = MOBILE, prefs } = {}) {
     }, prefs);
   }
   const page = await context.newPage();
-  const errors = [];
-  page.on("pageerror", (error) => errors.push(String(error)));
-  page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
+  const errors = watchErrors(page);
   if (iso) await page.clock.install({ time: new Date(iso) });
   await page.goto(BASE + path, { waitUntil: "load" });
   await page.locator('[data-testid="clock"], [data-testid="focus-view"], [data-testid="focus-pick"]').first().waitFor();
@@ -199,9 +209,7 @@ async function openPosters(path = "poster", viewport = { width: 1280, height: 90
   const context = await browser.newContext({ viewport });
   await context.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.abort());
   const page = await context.newPage();
-  const errors = [];
-  page.on("pageerror", (error) => errors.push(String(error)));
-  page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
+  const errors = watchErrors(page);
   await page.goto(BASE + path, { waitUntil: "load" });
   await page.getByTestId("qr").first().waitFor();
   await page.evaluate(() => document.fonts.ready);
