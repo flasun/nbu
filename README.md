@@ -111,21 +111,22 @@ Hanging them:
 
 ## Deploy on Cloudflare
 
-The Worker is named **`nbu`**. It must match `name` in `wrangler.jsonc`. Cloudflare has no Workers
-Builds trigger for it. Deploys are by hand, and CI only runs `wrangler deploy --dry-run`.
+One-time setup in the Cloudflare dashboard:
 
-Log in once with `npx wrangler login`, then:
+1. **Workers & Pages → Create → Import a repository**, and pick this repository.
+2. Name the Worker **`nbu`**. It must match `name` in `wrangler.jsonc`.
+3. Build command: `npm run build`. Deploy command: `npx wrangler deploy` (the default).
+4. Production branch: `main`. Leave preview builds on, so every pull request gets its own link.
+5. Under **Worker → Settings → Builds → Variables and secrets**, add `SITE_URL` with the site's
+   address, `https://nbu.racason.workers.dev`. It's a build variable: the "Runtime variables"
+   section is locked for a site that is only static files, and that's expected. Change it when
+   you add your own domain. Link previews in group chats need it (without it the share image is
+   left out), and the posters print their codes for it.
+6. To use your own domain: **Worker → Settings → Domains & Routes → Add → Custom domain**. The domain
+   has to be on Cloudflare DNS.
 
-```sh
-SITE_URL=https://nbu.racason.workers.dev npm run deploy
-```
-
-`npm run deploy` builds the site and runs `wrangler deploy`. `SITE_URL` is read at build time. Links
-shared in group chats need it (without it the share image is left out), and the posters print their
-codes for it. Change it when you add your own domain.
-
-To use your own domain: **Worker → Settings → Domains & Routes → Add → Custom domain**. The domain
-has to be on Cloudflare DNS.
+After that, every push to `main` deploys. To deploy by hand: `npx wrangler login`, then
+`SITE_URL=https://… npm run deploy`.
 
 `public/_headers` sets the response headers: hashed files under `/assets/` are cached for a year, while
 `sw.js` and the page always revalidate. It also sets a strict Content-Security-Policy and
