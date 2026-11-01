@@ -135,6 +135,29 @@ After that, every push to `main` deploys. To deploy by hand: `npx wrangler login
 If you turn on another Cloudflare feature that injects scripts (Rocket Loader, email obfuscation),
 add its origin to the CSP first, or the browser will block it.
 
+## Usage sheet
+
+`worker/index.js` counts each load of the board (including the poster links) in Cloudflare: one
+number per load, no visitor id, no cookies, so it counts loads, not people. Cloudflare keeps those
+counts for about three months. `scripts/usage-sheet.gs` copies them into a Google Sheet every
+morning and keeps them there for good.
+
+1. In Cloudflare, go to **My Profile → API Tokens → Create Token → Create Custom Token**. Give it
+   one permission, **Account → Account Analytics → Read**, and copy the token.
+2. Open the Google Sheet. Set **File → Settings → Time zone** to Eastern Time, so "today" in the
+   summary is Orlando's.
+3. Go to **Extensions → Apps Script**, replace what's there with `scripts/usage-sheet.gs`, and save.
+4. In Apps Script, open **Project Settings → Script properties → Add script property**: name
+   `CF_API_TOKEN`, value the token from step 1. It stays out of the sheet's cells.
+5. Reload the sheet. In the new **Next Bus Up** menu, click **Update every morning** and allow the
+   permissions Google asks for.
+
+You get two tabs. **Usage (hourly)** has one row per hour in Orlando time. **Usage summary** shows
+the last 7 and 30 days, and totals by day, by hour of the day and by weekday. Select a table and
+use **Insert → Chart** to graph it. **Next Bus Up → Update usage now** refreshes it at any time.
+
+For visits by device or browser, see **Web Analytics** in the Cloudflare dashboard.
+
 ## How offline works
 
 `public/sw.js` saves the page, its scripts, its styles and its fonts on the first visit. After that:
